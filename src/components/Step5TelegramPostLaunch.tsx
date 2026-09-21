@@ -60,6 +60,7 @@ interface Step5TelegramPostLaunchProps {
   onRefreshRaid: (eventType: RaidEventType) => Promise<void>;
   isRefreshingRaid: boolean;
   onOpenMicroSite?: () => void;
+  onReturnToMemeStudio?: () => void;
   activeStation?: CockpitStation;
   onChangeStation?: (station: CockpitStation) => void;
   onLaunchNewCoin?: () => void;
@@ -81,6 +82,7 @@ export const Step5TelegramPostLaunch: React.FC<Step5TelegramPostLaunchProps> = (
   onRefreshRaid,
   isRefreshingRaid,
   onOpenMicroSite,
+  onReturnToMemeStudio,
   activeStation,
   onChangeStation,
   onLaunchNewCoin,
@@ -554,6 +556,18 @@ export const Step5TelegramPostLaunch: React.FC<Step5TelegramPostLaunchProps> = (
 
           {/* Quick Header Actions */}
           <div className="flex items-center gap-2 flex-wrap">
+            {onReturnToMemeStudio && (
+              <button
+                type="button"
+                onClick={onReturnToMemeStudio}
+                className="py-2 px-3 rounded-lg bg-[#00f5ff] hover:bg-[#b2faff] text-black font-bold text-xs uppercase font-mono flex items-center justify-center gap-1.5 shadow-[0_0_12px_rgba(0,245,255,0.25)] transition-transform hover:scale-105 cursor-pointer"
+                title="Return to Step 2 to generate new memes, custom captions, or fresh banners"
+              >
+                <Edit3 className="w-3.5 h-3.5" />
+                <span>Meme Studio (Step 2)</span>
+              </button>
+            )}
+
             {onOpenMicroSite && (
               <button
                 type="button"
@@ -569,7 +583,7 @@ export const Step5TelegramPostLaunch: React.FC<Step5TelegramPostLaunchProps> = (
               href={submissionTweetUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="py-2 px-3 rounded-lg bg-[#00f5ff] hover:bg-[#b2faff] text-black font-bold text-xs uppercase font-mono flex items-center justify-center gap-1.5 shadow-[0_0_12px_rgba(0,245,255,0.2)] transition-all cursor-pointer"
+              className="py-2 px-3 rounded-lg bg-[#1a1d24] hover:bg-[#2d3139] text-[#00f5ff] border border-[#00f5ff]/40 font-bold text-xs uppercase font-mono flex items-center justify-center gap-1.5 transition-all cursor-pointer"
             >
               <Twitter className="w-3.5 h-3.5" />
               <span>Post on X</span>
@@ -757,6 +771,36 @@ export const Step5TelegramPostLaunch: React.FC<Step5TelegramPostLaunchProps> = (
             )}
           </div>
         </div>
+
+        {/* Continuous Post-Launch Creation Callout Banner */}
+        {onReturnToMemeStudio && (
+          <div className="mt-4 p-3.5 sm:p-4 rounded-xl bg-gradient-to-r from-[#0d1424] via-[#10192e] to-[#0b101c] border border-[#00f5ff]/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="flex items-start sm:items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-[#00f5ff]/10 border border-[#00f5ff]/30 flex items-center justify-center shrink-0">
+                <Sparkles className="w-4 h-4 text-[#00f5ff]" />
+              </div>
+              <div>
+                <div className="text-xs font-mono font-bold text-white uppercase flex flex-wrap items-center gap-2">
+                  <span>Continuous Creation Active</span>
+                  <span className="text-[9px] px-1.5 py-0.2 rounded bg-[#39ff14]/20 text-[#39ff14] font-mono font-bold">
+                    POST-LAUNCH MEME GENERATOR
+                  </span>
+                </div>
+                <p className="text-[11px] text-[#8e99ac] font-sans mt-0.5 max-w-2xl">
+                  Need fresh viral memes or custom X banners during live trading? Jump back to Step 2 anytime to render new meme formats, edit captions, and download custom graphics for {narrative.ticker}.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={onReturnToMemeStudio}
+              className="py-2 px-3.5 rounded-lg bg-[#00f5ff] hover:bg-[#b2faff] text-black font-mono font-bold text-xs uppercase flex items-center gap-1.5 shadow-[0_0_12px_rgba(0,245,255,0.25)] transition-all shrink-0 cursor-pointer w-full sm:w-auto justify-center"
+            >
+              <Edit3 className="w-3.5 h-3.5" />
+              <span>Open Meme Studio</span>
+            </button>
+          </div>
+        )}
 
         {/* 2. COLLAPSIBLE ORIGIN LORE TOGGLE */}
         <div className="mt-3 pt-3 border-t border-[#1e222d]">

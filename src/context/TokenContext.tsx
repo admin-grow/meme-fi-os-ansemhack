@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { generateVectorMascotSvg } from '../utils/mascotSvgGenerator';
 import { TokenSocialLinks } from '../types';
+import memeFiCatImage from '../assets/images/memefi_cat_mascot_1790023358949.jpg';
 
 export interface LaunchedTokenRecord {
   mintAddress: string;
@@ -27,6 +28,23 @@ export interface LaunchedTokenRecord {
   bondingProgress?: number;
 }
 
+export const DEFAULT_GENESIS_MFCAT_TOKEN: LaunchedTokenRecord = {
+  mintAddress: 'MFCAT88x7vK6wQ5nP4mB3xC2yR9tU1eW7sD5fG3pump',
+  tokenName: 'MemeFiCat',
+  ticker: 'MFCAT',
+  tagline: 'The official cybernetic feline orchestrating multi-agent AI meme deployments on Solana.',
+  lore: 'Born inside the Solana SVM runtime, $MFCAT is the official genesis utility mascot of MemeFi OS. Armed with glowing cyber-goggles and multi-terminal command interfaces, MemeFiCat coordinates the 4 sequential AI agents, automates viral meme canvas synthesis, and purrs at 400 TPS with permanent 100% genesis LP token burn.',
+  imageUrl: memeFiCatImage,
+  mascotSvg: generateVectorMascotSvg('MFCAT', 'MemeFiCat', 'Cybernetic neon cat with glowing holographic sunglasses sitting on a supercomputer cluster terminal', 'Tech/AI Absurdism', 'Cyberpunk Pixel Art'),
+  ipfsMetadataUri: 'https://clawpump.tech/token/MFCAT88x7vK6wQ5nP4mB3xC2yR9tU1eW7sD5fG3pump',
+  launchedAt: 1726200000000,
+  creatorWallet: '9yQP8a3N1vF7kxM2bL8uR4eW5dC6zVb1a0',
+  initialBuySol: 0.05,
+  marketCap: 98400,
+  solRaised: 68.4,
+  rewardModel: 'HOLDER_REWARDS',
+};
+
 export const DEFAULT_GENESIS_HITL_TOKEN: LaunchedTokenRecord = {
   mintAddress: 'HITL99zX4kL9wV8nB7mC5xP2qR1tY6uJ3aE7sD4fG2pump',
   tokenName: 'Human in the Loop',
@@ -41,6 +59,7 @@ export const DEFAULT_GENESIS_HITL_TOKEN: LaunchedTokenRecord = {
   initialBuySol: 0.05,
   marketCap: 64200,
   solRaised: 48.6,
+  rewardModel: 'CREATOR_FEE',
 };
 
 interface TokenContextType {
@@ -156,26 +175,37 @@ export const TokenProvider: React.FC<{
             if (!t.mascotSvg) {
               return {
                 ...t,
-                mascotSvg: generateVectorMascotSvg(t.ticker, t.tokenName, t.lore || t.tagline, 'Tech/AI Absurdism', 'Vector Sticker'),
+                mascotSvg: generateVectorMascotSvg(t.ticker, t.tokenName, t.lore || t.tagline, 'Tech/AI Absurdism', 'Cyberpunk Pixel Art'),
               };
             }
             return t;
           });
-          setUserTokens(hydrated);
-          setActiveMint((prev) => (prev && hydrated.some((t) => t.mintAddress === prev) ? prev : hydrated[0].mintAddress));
+          // Ensure default showcase tokens exist if not deleted
+          const hasMFCAT = hydrated.some((t) => t.ticker === 'MFCAT' || t.tokenName === 'MemeFiCat');
+          const hasHITL = hydrated.some((t) => t.ticker === 'HITL' || t.tokenName === 'Human in the Loop');
+          const fullList = [...hydrated];
+          if (!hasMFCAT) fullList.unshift(DEFAULT_GENESIS_MFCAT_TOKEN);
+          if (!hasHITL) fullList.push(DEFAULT_GENESIS_HITL_TOKEN);
+
+          setUserTokens(fullList);
+          setActiveMint((prev) => (prev && fullList.some((t) => t.mintAddress === prev) ? prev : fullList[0].mintAddress));
         } else {
-          setUserTokens([]);
-          setActiveMint(null);
+          // Pre-load default official showcase tokens
+          const initialShowcase = [DEFAULT_GENESIS_MFCAT_TOKEN, DEFAULT_GENESIS_HITL_TOKEN];
+          setUserTokens(initialShowcase);
+          setActiveMint(DEFAULT_GENESIS_MFCAT_TOKEN.mintAddress);
         }
       } else {
-        // Zero-baseline initial state for honest telemetry
-        setUserTokens([]);
-        setActiveMint(null);
+        // Initial state with official MemeFiCat & HITL showcase tokens
+        const initialShowcase = [DEFAULT_GENESIS_MFCAT_TOKEN, DEFAULT_GENESIS_HITL_TOKEN];
+        setUserTokens(initialShowcase);
+        setActiveMint(DEFAULT_GENESIS_MFCAT_TOKEN.mintAddress);
       }
     } catch (e) {
       console.error('Failed to load wallet tokens from localStorage:', e);
-      setUserTokens([]);
-      setActiveMint(null);
+      const fallbackShowcase = [DEFAULT_GENESIS_MFCAT_TOKEN, DEFAULT_GENESIS_HITL_TOKEN];
+      setUserTokens(fallbackShowcase);
+      setActiveMint(DEFAULT_GENESIS_MFCAT_TOKEN.mintAddress);
     }
   }, [storageKey]);
 

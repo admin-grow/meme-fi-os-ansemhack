@@ -16,15 +16,15 @@ const NARRATIVE_PRESETS: Record<string, {
   tweets: string[];
 }> = {
   'Tech/AI Absurdism': {
-    name: 'Neural Catnip',
-    ticker: '$NCAT',
-    tagline: 'Training 70B parameter models purely on zoomies and laser pointers.',
-    lore: 'When researchers left an AI model unsupervised with 10,000 hours of 3 AM cat videos, it developed its own consensus mechanism. Now it optimizes token velocity through feline hyper-focus.',
-    mascotPrompt: 'Cybernetic neon cat with glowing holographic sunglasses sitting on a supercomputer cluster',
+    name: 'MemeFiCat',
+    ticker: '$MFCAT',
+    tagline: 'The official cybernetic feline orchestrating multi-agent AI meme deployments on Solana.',
+    lore: 'Born inside the Solana SVM runtime, $MFCAT is the official genesis utility mascot of MemeFi OS. Armed with glowing cyber-goggles and multi-terminal command interfaces, MemeFiCat coordinates the 4 sequential AI agents, automates viral meme canvas synthesis, and purrs at 400 TPS with permanent 100% genesis LP token burn.',
+    mascotPrompt: 'Cybernetic neon cat with glowing holographic sunglasses sitting on a supercomputer cluster terminal, cyberpunk pixel art',
     tweets: [
-      '🚀 Just launched $NCAT on Solana! The first AI agent trained strictly on 3 AM zoomies. Zero allocation, 100% fair launch.',
-      'Why buy ordinary tokens when you can back a decentralized neural network chasing laser pointers on-chain? $NCAT',
-      'Community mobilization active for $NCAT! Join the pride on Solana before Raydium migration.'
+      '🐾 $MFCAT is officially deployed on Solana! The official genesis utility mascot of MemeFi OS is live. 100% genesis LP burned forever.',
+      'Why chase ordinary tokens when the MemeFi OS mascot $MFCAT coordinates the entire 4-agent swarm on-chain? ⚡🐱',
+      '⚡ Community mobilization active for $MFCAT! Grab your allocation on the ClawPump bonding curve before Raydium graduation.'
     ],
   },
   'Degenerate/Lore Culture': {

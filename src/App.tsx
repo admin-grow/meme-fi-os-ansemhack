@@ -37,7 +37,7 @@ import { Zap, Sparkles, ShieldCheck, Globe, ArrowLeft, ExternalLink, Laptop, Boo
 
 function AppContent() {
   const { wallet } = useSolanaWallet();
-  const { userTokens, activeToken, saveLaunchedToken } = useTokenContext();
+  const { userTokens, activeToken, saveLaunchedToken, setActiveTokenByMint } = useTokenContext();
 
   // Primary View Controller: 'landing' (Crypto Terminal & Launches) vs 'studio' (Standalone App Workspace)
   const [activeView, setActiveView] = useState<'studio' | 'landing'>('landing');
@@ -308,6 +308,71 @@ function AppContent() {
     setIsPreviewingMicroSite(true);
   };
 
+  const handleSelectTokenToStudio = (token: LaunchedTokenRecord) => {
+    setActiveTokenByMint(token.mintAddress);
+
+    // Populate the Studio campaign state with this token so Steps 1, 2, 3, 4 are fully active
+    const tokenCampaign: FullCampaignData = {
+      agent1: {
+        token_name: token.tokenName,
+        ticker: token.ticker.startsWith('$') ? token.ticker : `$${token.ticker}`,
+        tagline: token.tagline,
+        lore: token.lore,
+        viral_score: 96,
+        tweet_pack: [
+          `🔥 ${token.tokenName} ($${token.ticker.replace('$', '')}) is live on Solana!`,
+          token.tagline,
+          `Join the community: https://clawpump.tech/token/${token.mintAddress}`,
+        ],
+        mascot_prompt: token.lore,
+      },
+      agent2: {
+        image_generation_prompt: `High quality vector mascot of ${token.tokenName}`,
+        negative_prompt: 'blurry, low quality',
+        meme_overlay: {
+          template_type: 'Breaking News',
+          top_header: 'BREAKING NEWS',
+          bottom_caption: `${token.tokenName.toUpperCase()} ACTIVE ON SOLANA`,
+          ticker_watermark: token.ticker.startsWith('$') ? token.ticker : `$${token.ticker}`,
+        },
+        mascot_image_url: token.imageUrl,
+        mascot_svg: token.mascotSvg || generateVectorMascotSvg(
+          token.ticker,
+          token.tokenName,
+          token.lore,
+          'Tech/AI Absurdism'
+        ),
+        rendered_meme_url: token.renderedMemeUrl || token.imageUrl,
+      },
+      agent3: {
+        telegram_message: `🚀 <b>NEW $${token.ticker.replace('$', '')} COMMUNITY DISPATCH!</b>\n\nAutonomous agents deployed $${token.ticker.replace('$', '')} on Solana.\n\n🎯 <b>Target:</b> 100 Replies & Retweets.\n\n👇 <b>Engage now:</b>`,
+        button_label: `⚡ Execute $${token.ticker.replace('$', '')} Broadcast`,
+        button_url: `https://x.com/intent/tweet?text=${encodeURIComponent(`Check out $${token.ticker.replace('$', '')} on Solana! CA: ${token.mintAddress}`)}`,
+      },
+      deployment: {
+        deployed: true,
+        mintAddress: token.mintAddress,
+        txHash: '5zK9X...simulatedSolanaTxHash',
+        liquidityPool: 'Raydium-ClawPump-BondingCurve',
+        bondingCurve: 'SolanaProgram2022BondingEngine',
+        blockNumber: 29482910,
+        solanaNetwork: 'mainnet-beta',
+        timestamp: new Date(token.launchedAt || Date.now()).toISOString(),
+        deployerWallet: token.creatorWallet,
+        initialSupply: '1,000,000,000',
+        poolShare: '100% Fair Launch',
+        clawPumpUrl: `https://clawpump.tech/token/${token.mintAddress}`,
+        socialLinks: token.socialLinks,
+      }
+    };
+
+    setCampaign(tokenCampaign);
+    setMaxReachedStep(4);
+    setCurrentStep(2); // Jump straight to Step 2 (Visual Studio / Meme Studio)
+    setActiveView('studio');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   // If viewing dynamic micro-site full-screen
   if (activeTokenRouteCA || isPreviewingMicroSite) {
     const matchedToken = userTokens.find((t) => t.mintAddress === activeTokenRouteCA) || activeToken;
@@ -447,6 +512,7 @@ function AppContent() {
         onOpenDevPortfolioModal={() => setIsDevPortfolioOpen(true)}
         onOpenWhitepaper={() => setIsWhitepaperOpen(true)}
         onSelectTokenForMicroSite={handleSelectTokenForMicroSite}
+        onSelectTokenToStudio={handleSelectTokenToStudio}
         campaignNarrative={campaign?.agent1 || null}
         campaignVisual={campaign?.agent2 || null}
         campaignDeployment={campaign?.deployment || null}
@@ -505,15 +571,13 @@ function AppContent() {
               )}
             </div>
 
-            {/* 4-Step Guided Stepper Navigation (Visible during Genesis Steps 1-3; hidden post-launch) */}
-            {currentStep < 4 && (
-              <WizardStepper
-                currentStep={currentStep}
-                maxReachedStep={maxReachedStep}
-                onSelectStep={handleStepNavigation}
-                isGenerating={isGenerating}
-              />
-            )}
+            {/* 4-Step Guided Stepper Navigation (Always accessible for continuous creation) */}
+            <WizardStepper
+              currentStep={currentStep}
+              maxReachedStep={maxReachedStep}
+              onSelectStep={handleStepNavigation}
+              isGenerating={isGenerating}
+            />
 
             {/* Error Banner */}
             {errorMessage && (
@@ -560,6 +624,11 @@ function AppContent() {
                   narrative={campaign.agent1}
                   visual={campaign.agent2}
                   onUpdateVisual={handleUpdateVisual}
+                  isDeployed={Boolean(campaign.deployment?.deployed)}
+                  onGoToCockpit={() => {
+                    setCurrentStep(4);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
                   onNext={() => {
                     setCurrentStep(3);
                     setMaxReachedStep((prev) => (prev < 3 ? 3 : prev));
@@ -591,6 +660,10 @@ function AppContent() {
                   onRefreshRaid={handleRefreshRaid}
                   isRefreshingRaid={isRefreshingRaid}
                   onOpenMicroSite={() => setIsPreviewingMicroSite(true)}
+                  onReturnToMemeStudio={() => {
+                    setCurrentStep(2);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
                   onLaunchNewCoin={handleReset}
                   onViewGenesis={() => {
                     setCurrentStep(1);

@@ -31,6 +31,8 @@ interface Step3MemeStudioProps {
   visual: Agent2VisualResult;
   onUpdateVisual: (updated: Agent2VisualResult) => void;
   onNext: () => void;
+  isDeployed?: boolean;
+  onGoToCockpit?: () => void;
 }
 
 const TEMPLATES: { id: MemeTemplateType; name: string; icon: string; desc: string }[] = [
@@ -55,6 +57,8 @@ export const Step3MemeStudio: React.FC<Step3MemeStudioProps> = ({
   visual,
   onUpdateVisual,
   onNext,
+  isDeployed = false,
+  onGoToCockpit,
 }) => {
   // Active Meme Customization State
   const [selectedTemplate, setSelectedTemplate] = useState<MemeTemplateType>(
@@ -856,6 +860,32 @@ export const Step3MemeStudio: React.FC<Step3MemeStudioProps> = ({
           </div>
         </div>
 
+        {/* Live Token Continuous Asset Notice */}
+        {isDeployed && (
+          <div className="mt-4 p-3 rounded-xl bg-gradient-to-r from-[#0d1424] via-[#10192e] to-[#0b101c] border border-[#39ff14]/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs font-mono">
+            <div className="flex items-center gap-2 text-[#39ff14]">
+              <CheckCircle2 className="w-4 h-4 text-[#39ff14] shrink-0" />
+              <div>
+                <span className="font-bold uppercase tracking-wider text-white">
+                  Continuous Asset Studio Active &bull; Live Token: {narrative.token_name} ({narrative.ticker})
+                </span>
+                <span className="text-[10px] text-[#8e99ac] block sm:inline sm:ml-2">
+                  Generate new memes, switch templates, or download custom banners for your community at any time.
+                </span>
+              </div>
+            </div>
+            {onGoToCockpit && (
+              <button
+                type="button"
+                onClick={onGoToCockpit}
+                className="px-3 py-1.5 rounded-lg bg-[#141824] hover:bg-[#1a2032] border border-[#00f5ff]/40 text-[#00f5ff] text-[11px] font-bold uppercase transition-all shrink-0 cursor-pointer"
+              >
+                &larr; Return to Cockpit (Step 4)
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Style Swapper Chips (Horizontal Bar) */}
         <div className="mt-4 pt-1">
           <div className="flex items-center justify-between gap-2 mb-2">
@@ -1367,28 +1397,55 @@ export const Step3MemeStudio: React.FC<Step3MemeStudioProps> = ({
         <div className="mt-6 pt-4 border-t border-[#2d3139] flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="text-[11px] text-[#e0e0e0] opacity-60 font-mono flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-            <span>Assets ready</span>
+            <span>{isDeployed ? 'Live Token Asset Studio' : 'Assets ready'}</span>
           </div>
-          <button
-            onClick={() => {
-              try {
-                if (canvasRef.current) {
-                  const dataUrl = canvasRef.current.toDataURL('image/png');
-                  onUpdateVisual({
-                    ...visual,
-                    rendered_meme_url: dataUrl,
-                  });
+
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-end">
+            {isDeployed && onGoToCockpit && (
+              <button
+                type="button"
+                onClick={() => {
+                  try {
+                    if (canvasRef.current) {
+                      const dataUrl = canvasRef.current.toDataURL('image/png');
+                      onUpdateVisual({
+                        ...visual,
+                        rendered_meme_url: dataUrl,
+                      });
+                    }
+                  } catch (e) {
+                    console.warn('Could not export canvas to dataUrl:', e);
+                  }
+                  onGoToCockpit();
+                }}
+                className="w-full sm:w-auto py-3 px-5 bg-[#39ff14] text-black font-bold text-xs uppercase tracking-tight rounded-xl hover:bg-[#52ff33] shadow-[0_0_20px_rgba(57,255,20,0.25)] flex items-center justify-center gap-2 transition-all cursor-pointer font-mono"
+              >
+                <Check className="w-4 h-4 stroke-[3]" />
+                <span>Save &amp; Return to Cockpit</span>
+              </button>
+            )}
+
+            <button
+              onClick={() => {
+                try {
+                  if (canvasRef.current) {
+                    const dataUrl = canvasRef.current.toDataURL('image/png');
+                    onUpdateVisual({
+                      ...visual,
+                      rendered_meme_url: dataUrl,
+                    });
+                  }
+                } catch (e) {
+                  console.warn('Could not export canvas to dataUrl:', e);
                 }
-              } catch (e) {
-                console.warn('Could not export canvas to dataUrl:', e);
-              }
-              onNext();
-            }}
-            className="w-full sm:w-auto py-3 px-5 bg-[#00f5ff] text-black font-bold text-xs uppercase tracking-tight rounded-xl hover:bg-[#b2faff] shadow-[0_0_20px_rgba(0,245,255,0.3)] flex items-center justify-center gap-2 transition-all cursor-pointer font-mono"
-          >
-            <span>Approve &amp; Continue</span>
-            <ArrowRight className="w-4 h-4" />
-          </button>
+                onNext();
+              }}
+              className="w-full sm:w-auto py-3 px-5 bg-[#00f5ff] text-black font-bold text-xs uppercase tracking-tight rounded-xl hover:bg-[#b2faff] shadow-[0_0_20px_rgba(0,245,255,0.3)] flex items-center justify-center gap-2 transition-all cursor-pointer font-mono"
+            >
+              <span>{isDeployed ? 'Continue to Deployment Specs' : 'Approve & Continue'}</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
     </div>

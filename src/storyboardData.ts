@@ -198,6 +198,7 @@ export const SPARK_CATEGORIES = [
   {
     group: '🧠 Modern Satire',
     sparks: [
+      { name: 'MemeFiCat ($MFCAT)', emoji: '🐱', category: 'Tech/AI Absurdism' as CategoryType, defaultAngle: 'The cybernetic terminal cat orchestrating the 4-agent swarm on Solana with glowing goggles and 400 TPS laser focus' },
       { name: 'Human in the Loop ($HITL)', emoji: '🛑', category: 'Tech/AI Absurdism' as CategoryType, defaultAngle: '4 autonomous AI agents computing millions of trades at lightspeed, desperately waiting for one exhausted human with an iced latte to click Approve' },
       { name: 'Vibe Coder', emoji: '💻', category: 'Tech/AI Absurdism' as CategoryType, defaultAngle: 'Refuses to read API docs, just speaks poetic incantations into the terminal' },
       { name: 'Rogue Toaster', emoji: '🍞', category: 'Tech/AI Absurdism' as CategoryType, defaultAngle: 'Passed the Turing test but still refuses to toast both sides evenly' },
