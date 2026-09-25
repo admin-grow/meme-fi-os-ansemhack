@@ -1,6 +1,6 @@
 {
   "name": "MemeFI OS",
-  "description": "The AI-powered multi-agent studio that transforms internet sentiment into complete on-chain Solana token brands—synthesizing custom lore, vector mascots, social launch kits, and ClawPump bonding curves with a human in the loop.",
+  "description": "The AI-powered multi-agent studio that transforms internet sentiment into complete on-chain Solana token brands.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

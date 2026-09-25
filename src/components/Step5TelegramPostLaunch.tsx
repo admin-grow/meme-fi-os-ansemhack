@@ -1585,11 +1585,9 @@ export const Step5TelegramPostLaunch: React.FC<Step5TelegramPostLaunchProps> = (
           {mobilizeSubSection === 'xcommunity' && (
             <div className="animate-fadeIn">
               <XCommunitySetupWidget
-                tokenName={narrative.token_name}
-                ticker={narrative.ticker}
-                tagline={narrative.tagline}
-                lore={narrative.lore}
-                contractAddress={contractAddress}
+                narrative={narrative}
+                visual={visual}
+                deployment={deployment}
               />
             </div>
           )}

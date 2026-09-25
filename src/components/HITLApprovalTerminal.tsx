@@ -67,7 +67,7 @@ export const HITLApprovalTerminal: React.FC<HITLApprovalTerminalProps> = ({
     // Step 1 -> Step 2 (Buy Simulation)
     setTimeout(() => {
       setTestLoopStep(2);
-      // Step 2 -> Step 3 (Pyth Oracle Sync)
+      // Step 2 -> Step 3 (Solana RPC Sync)
       setTimeout(() => {
         setTestLoopStep(3);
         // Step 3 -> Step 4 (Burn Verification)
@@ -275,8 +275,8 @@ export const HITLApprovalTerminal: React.FC<HITLApprovalTerminalProps> = ({
                   }`}
                 >
                   <div className="text-[10px] text-[#a855f7] font-bold">STEP 3</div>
-                  <div className="font-bold mt-0.5">Pyth Sync</div>
-                  <div className="text-[10px] opacity-75 mt-1">&lt;400ms latency</div>
+                  <div className="font-bold mt-0.5">Solana RPC Sync</div>
+                  <div className="text-[10px] opacity-75 mt-1">Slot confirmation</div>
                 </div>
 
                 <div

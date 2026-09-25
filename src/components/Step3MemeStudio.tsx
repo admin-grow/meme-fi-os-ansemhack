@@ -16,6 +16,7 @@ import {
   Palette,
   Sparkles,
   ArrowRight,
+  ArrowLeft,
   Zap,
   Sliders,
   Move,
@@ -31,6 +32,7 @@ interface Step3MemeStudioProps {
   visual: Agent2VisualResult;
   onUpdateVisual: (updated: Agent2VisualResult) => void;
   onNext: () => void;
+  onBack?: () => void;
   isDeployed?: boolean;
   onGoToCockpit?: () => void;
 }
@@ -57,6 +59,7 @@ export const Step3MemeStudio: React.FC<Step3MemeStudioProps> = ({
   visual,
   onUpdateVisual,
   onNext,
+  onBack,
   isDeployed = false,
   onGoToCockpit,
 }) => {
@@ -136,9 +139,8 @@ export const Step3MemeStudio: React.FC<Step3MemeStudioProps> = ({
     }
   }, [visual, narrative.ticker]);
 
-  // Handle Dedicated Multi-Modal AI Image Synthesis via /api/generate-image with cost defense
-  const handleGenerateAiMascot = async () => {
-    if (isGeneratingAiImage) return;
+  // Reusable trigger for Rich AI Image Synthesis
+  const triggerRichImageGeneration = async (currentVisual: Agent2VisualResult): Promise<Agent2VisualResult> => {
     setIsGeneratingAiImage(true);
     setRateLimitNotice(null);
 
@@ -147,7 +149,7 @@ export const Step3MemeStudio: React.FC<Step3MemeStudioProps> = ({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          prompt: narrative.mascot_prompt || visual.image_generation_prompt || `Mascot for ${narrative.token_name} ${narrative.ticker}`,
+          prompt: narrative.mascot_prompt || currentVisual.image_generation_prompt || `Mascot for ${narrative.token_name} ${narrative.ticker}`,
           ticker: narrative.ticker,
           token_name: narrative.token_name,
           category: 'Tech/AI Absurdism',
@@ -156,35 +158,31 @@ export const Step3MemeStudio: React.FC<Step3MemeStudioProps> = ({
       });
 
       const data = await response.json();
+      
+      const newVisual = {
+        ...currentVisual,
+        mascot_svg: data.mascot_svg || currentVisual.mascot_svg,
+        mascot_image_url: data.image_url || currentVisual.mascot_image_url,
+      };
 
       if (response.status === 429 || response.status === 403) {
-        setRateLimitNotice(data.message || 'Free Client-Side Canvas Meme Studio active ($0.00 API cost).');
-        if (data.mascot_svg) {
-          onUpdateVisual({
-            ...visual,
-            mascot_svg: data.mascot_svg,
-          });
-        }
-        return;
+        setRateLimitNotice(data.message || 'Procedural vector fallback active.');
       }
 
-      if (response.ok) {
-        onUpdateVisual({
-          ...visual,
-          mascot_svg: data.mascot_svg || visual.mascot_svg,
-          mascot_image_url: data.image_url || undefined,
-        });
-
-        if (data.quota_depleted || (!data.image_url && data.mascot_svg)) {
-          setRateLimitNotice('✨ Procedural Vector Mascot Synthesizer active: High-resolution vector mascot loaded ($0 API credits used).');
-        }
-      }
+      onUpdateVisual(newVisual);
+      return newVisual;
     } catch (err) {
       console.info('Client-side mascot fallback active:', err);
-      setRateLimitNotice('Free Client-Side Canvas Studio is active.');
+      return currentVisual;
     } finally {
       setIsGeneratingAiImage(false);
     }
+  };
+
+  // Handle Dedicated Multi-Modal AI Image Synthesis via /api/generate-image with cost defense
+  const handleGenerateAiMascot = async () => {
+    if (isGeneratingAiImage) return;
+    await triggerRichImageGeneration(visual);
   };
 
   // Handle Style Reprompting via Agent 2
@@ -1395,9 +1393,21 @@ export const Step3MemeStudio: React.FC<Step3MemeStudioProps> = ({
 
         {/* Step Transition Action Bar */}
         <div className="mt-6 pt-4 border-t border-[#2d3139] flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="text-[11px] text-[#e0e0e0] opacity-60 font-mono flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-            <span>{isDeployed ? 'Live Token Asset Studio' : 'Assets ready'}</span>
+          <div className="flex items-center gap-2">
+            {onBack && (
+              <button
+                type="button"
+                onClick={onBack}
+                className="py-2.5 px-4 bg-[#141824] hover:bg-[#1f2638] text-[#e0e0e0] hover:text-white border border-[#2d354a] font-bold text-xs uppercase tracking-tight rounded-xl flex items-center gap-1.5 transition-all cursor-pointer font-mono"
+              >
+                <ArrowLeft className="w-4 h-4 text-[#00f5ff]" />
+                <span>← Back to Concept</span>
+              </button>
+            )}
+            <div className="text-[11px] text-[#e0e0e0] opacity-60 font-mono hidden sm:flex items-center gap-2 ml-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+              <span>{isDeployed ? 'Live Token Asset Studio' : 'Assets ready'}</span>
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-end">
@@ -1426,12 +1436,23 @@ export const Step3MemeStudio: React.FC<Step3MemeStudioProps> = ({
             )}
 
             <button
-              onClick={() => {
+              onClick={async () => {
+                console.log('Approve & Continue clicked. Visual:', visual);
+                let currentVisual = visual;
+                // Auto-trigger rich generation if missing
+                if (!visual.mascot_image_url) {
+                  console.log('Triggering rich image generation...');
+                  currentVisual = await triggerRichImageGeneration(visual);
+                  console.log('Rich image generation result:', currentVisual);
+                } else {
+                  console.log('Skipping rich generation - image URL already exists.');
+                }
+
                 try {
                   if (canvasRef.current) {
                     const dataUrl = canvasRef.current.toDataURL('image/png');
                     onUpdateVisual({
-                      ...visual,
+                      ...currentVisual,
                       rendered_meme_url: dataUrl,
                     });
                   }

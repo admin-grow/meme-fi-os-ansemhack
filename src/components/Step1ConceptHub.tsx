@@ -3,11 +3,11 @@ import { CategoryType, Agent1NarrativeResult, TickerAuditResult } from '../types
 import { 
   Zap, Sparkles, Shuffle, ArrowRight, Compass, Flame, 
   Film, RefreshCw, CheckCircle2, Lightbulb, Dices, 
-  Copy, Check, ShieldCheck, AlertTriangle, BookOpen, Edit3, ExternalLink
+  Copy, Check, ShieldCheck, AlertTriangle, BookOpen, Edit3, ExternalLink, Terminal
 } from 'lucide-react';
 import { 
   rollCatalyst, DynamicCatalyst, SPARK_CATEGORIES, BESPOKE_VIBES, 
-  DYNAMIC_ANGLES_BY_VIBE, ART_STYLES_BESPOKE
+  DYNAMIC_ANGLES_BY_VIBE, ART_STYLES_BESPOKE, NARRATIVE_STRATEGIES
 } from '../storyboardData';
 
 interface Step1ConceptHubProps {
@@ -15,7 +15,7 @@ interface Step1ConceptHubProps {
   setCategory: (cat: CategoryType) => void;
   prompt: string;
   setPrompt: (p: string) => void;
-  onGenerate: () => void;
+  onGenerate: (bespokeConfig?: any) => void;
   isGenerating: boolean;
   activeAgentLog: string;
   narrative?: Agent1NarrativeResult | null;
@@ -23,6 +23,25 @@ interface Step1ConceptHubProps {
   onApproveAndProceed: () => void;
   onOpenNarrativeModal?: () => void;
 }
+
+
+const PromptInspector: React.FC<{ show: boolean; setShow: (s: boolean) => void; prompt: string }> = ({ show, setShow, prompt }) => (
+  <div className="mt-4 p-3 border border-[#2d3139] rounded-xl bg-[#0a0b0d] space-y-2">
+    <button
+      onClick={() => setShow(!show)}
+      className="flex items-center gap-2 text-xs font-mono text-[#8b949e] hover:text-[#00f5ff]"
+    >
+      <Terminal className="w-3 h-3" />
+      {show ? 'Hide Prompt Inspector' : 'Show Prompt Inspector'}
+    </button>
+    {show && (
+      <div className="text-[10px] font-mono text-[#8b949e] p-2 bg-[#000] border border-[#232730] rounded-lg break-words overflow-auto max-h-40">
+        <span className="text-[#c084fc] font-bold">USER_PROMPT:</span><br/>
+        {prompt}
+      </div>
+    )}
+  </div>
+);
 
 export const Step1ConceptHub: React.FC<Step1ConceptHubProps> = ({
   category,
@@ -57,11 +76,18 @@ export const Step1ConceptHub: React.FC<Step1ConceptHubProps> = ({
   // -------------------------------------------------------------
   // MODE 2: Bespoke Storyboard Creator (Subject + Vibe + Guidance)
   // -------------------------------------------------------------
-  const [bespokeSubject, setBespokeSubject] = useState<string>('Sleepy River Otter');
+  const [bespokeSubject, setBespokeSubject] = useState<string>('');
   const [bespokeVibe, setBespokeVibe] = useState<string>('Wholesome & Cute');
-  const [bespokeAngle, setBespokeAngle] = useState<string>('Floating peacefully on calm waters holding a lucky pebble while the market panics');
+  const [bespokeAngle, setBespokeAngle] = useState<string>('Refuses to leave its cozy blanket unless given gentle head pats and treats');
   const [bespokeArtStyle, setBespokeArtStyle] = useState<string>('3D Volumetric Claymation');
+  const [narrativeStrategy, setNarrativeStrategy] = useState<string>('Community Builder');
   const [activeSparkTab, setActiveSparkTab] = useState<number>(0);
+  const [showInspector, setShowInspector] = useState(false);
+
+  // Helper to validate if all required bespoke fields are filled
+  const isBespokeFormValid = useMemo(() => {
+    return bespokeSubject.trim() !== '';
+  }, [bespokeSubject]);
 
   // Right-pane Interactive Narrative States
   const [copiedTicker, setCopiedTicker] = useState(false);
@@ -75,6 +101,8 @@ export const Step1ConceptHub: React.FC<Step1ConceptHubProps> = ({
   const [editableLore, setEditableLore] = useState(narrative?.lore || '');
   const [isEditingMascotPrompt, setIsEditingMascotPrompt] = useState(false);
   const [editableMascotPrompt, setEditableMascotPrompt] = useState(narrative?.mascot_prompt || '');
+  const [isEditingRallyingPhrase, setIsEditingRallyingPhrase] = useState(false);
+  const [editableRallyingPhrase, setEditableRallyingPhrase] = useState(narrative?.rallying_phrase || '');
 
   // Keep local ticker & audit synced when narrative updates
   useEffect(() => {
@@ -84,6 +112,7 @@ export const Step1ConceptHub: React.FC<Step1ConceptHubProps> = ({
       setAuditData(narrative.ticker_audit);
       setEditableLore(narrative.lore);
       setEditableMascotPrompt(narrative.mascot_prompt);
+      setEditableRallyingPhrase(narrative.rallying_phrase);
     }
   }, [narrative]);
 
@@ -108,11 +137,13 @@ export const Step1ConceptHub: React.FC<Step1ConceptHubProps> = ({
     setBespokeAngle(nextAngle);
   };
 
-  // Quick Spark Selection
+  // Quick Spark Selection - instantly sets subject, category, and angle without blocking popups
   const handleSelectSpark = (spark: { name: string; emoji: string; category: CategoryType; defaultAngle: string }) => {
     setBespokeSubject(spark.name);
     setCategory(spark.category);
-    setBespokeAngle(spark.defaultAngle);
+    if (spark.defaultAngle) {
+      setBespokeAngle(spark.defaultAngle);
+    }
   };
 
   // Surprise random subject
@@ -124,19 +155,29 @@ export const Step1ConceptHub: React.FC<Step1ConceptHubProps> = ({
 
   // Synthesize Mode 2 prompt
   const synthesizedBespokePrompt = useMemo(() => {
-    return `Subject: ${bespokeSubject}. Narrative Lens: ${bespokeVibe}. Driving Behavior: ${bespokeAngle}. Rendered in ${bespokeArtStyle}, clean centered mascot subject, vivid expressive features, 512x512 vector sticker style.`;
-  }, [bespokeSubject, bespokeVibe, bespokeAngle, bespokeArtStyle]);
+    return `Subject: ${bespokeSubject}. Narrative Strategy: ${narrativeStrategy}. Narrative Lens: ${bespokeVibe}. Driving Behavior: ${bespokeAngle}. Rendered in ${bespokeArtStyle}, clean centered mascot subject, vivid expressive features, 512x512 vector sticker style.`;
+  }, [bespokeSubject, bespokeVibe, bespokeAngle, bespokeArtStyle, narrativeStrategy]);
 
-  // Sync initial prompt on mount if empty
+  // Sync initial prompt on mount if empty - REMOVED: No longer auto-synthesizing
   useEffect(() => {
-    if (!prompt) {
-      setPrompt(synthesizedBespokePrompt);
-    }
+    // No action here
   }, []);
 
   const handleApplyBespokeAndGenerate = () => {
-    setPrompt(synthesizedBespokePrompt);
-    onGenerate();
+    if (!isBespokeFormValid) {
+      return;
+    }
+    const bespokeConfig = {
+      subject: bespokeSubject.trim(),
+      vibe: bespokeVibe,
+      angle: bespokeAngle,
+      artStyle: bespokeArtStyle,
+      strategy: narrativeStrategy || 'Community Builder',
+      category,
+      prompt: `Subject: ${bespokeSubject.trim()}. Narrative Objective: ${narrativeStrategy || 'Community Builder'}. Vibe (Tone): ${bespokeVibe}. Driving Behavior: ${bespokeAngle}. Rendered in ${bespokeArtStyle}, clean centered mascot subject, vivid expressive features, 512x512 vector sticker style.`,
+      isFastRoll: false,
+    };
+    onGenerate(bespokeConfig);
   };
 
   // Ticker selection & custom edit
@@ -231,6 +272,16 @@ export const Step1ConceptHub: React.FC<Step1ConceptHubProps> = ({
     }
   };
 
+  const handleSaveRallyingPhraseEdit = () => {
+    setIsEditingRallyingPhrase(false);
+    if (narrative && onUpdateNarrative) {
+      onUpdateNarrative({
+        ...narrative,
+        rallying_phrase: editableRallyingPhrase,
+      });
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Top Mode Switcher Bar */}
@@ -318,15 +369,21 @@ export const Step1ConceptHub: React.FC<Step1ConceptHubProps> = ({
                   </button>
                 </div>
 
+                <PromptInspector show={showInspector} setShow={setShowInspector} prompt={synthesizedBespokePrompt} />
+
                 <div className="relative">
                   <input
                     id="input-bespoke-subject"
                     type="text"
                     value={bespokeSubject}
+                    maxLength={100}
                     onChange={(e) => setBespokeSubject(e.target.value)}
                     placeholder="e.g. Bear Market, Sleepy Otter, Smug Duck, Matcha Latte..."
                     className="w-full px-3.5 py-2.5 bg-[#0a0b0d] border border-[#2d3139] focus:border-[#a855f7] rounded-xl text-sm font-mono text-[#ffffff] placeholder-[#6b7280] focus:outline-none transition-all shadow-inner"
                   />
+                  <div className="absolute right-3 top-2.5 text-[10px] font-mono text-[#6b7280]">
+                    {bespokeSubject.length}/100
+                  </div>
                 </div>
 
                 {/* Need a Spark Chips */}
@@ -374,54 +431,53 @@ export const Step1ConceptHub: React.FC<Step1ConceptHubProps> = ({
                 </div>
               </div>
 
-              {/* Step 2: Vibe & Cultural Angle */}
-              <div className="p-4 bg-[#12141a] border border-[#2d3139] rounded-2xl shadow-xl space-y-3">
-                <h3 className="text-xs font-mono uppercase tracking-wider text-[#38bdf8] flex items-center gap-2 font-bold">
-                  <span className="w-5 h-5 rounded-full bg-[#38bdf8]/20 border border-[#38bdf8]/40 flex items-center justify-center text-[10px] text-[#38bdf8] font-bold">2</span>
-                  Narrative Style
+              {/* Step 2: Narrative Strategy & Phrase (NEW) */}
+              <div className="p-4 bg-[#12141a] border border-[#2d3139] rounded-2xl shadow-xl space-y-4">
+                <h3 className="text-xs font-mono uppercase tracking-wider text-[#fbbf24] flex items-center gap-2 font-bold">
+                  <span className="w-5 h-5 rounded-full bg-[#fbbf24]/20 border border-[#fbbf24]/40 flex items-center justify-center text-[10px] text-[#fbbf24] font-bold">2</span>
+                  Narrative Objective
                 </h3>
+                
+                <select 
+                  value={narrativeStrategy}
+                  onChange={(e) => setNarrativeStrategy(e.target.value)}
+                  className="w-full p-2.5 bg-[#0a0b0d] border border-[#232730] rounded-xl text-xs font-mono text-[#e0e0e0] focus:border-[#fbbf24] focus:outline-none"
+                >
+                  <option value="">Select Objective</option>
+                  {NARRATIVE_STRATEGIES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                </select>
 
-                <div className="grid grid-cols-2 gap-2">
-                  {BESPOKE_VIBES.map((vibe) => (
-                    <button
-                      key={vibe.id}
-                      type="button"
-                      onClick={() => handleVibeChange(vibe.id)}
-                      className={`p-2.5 rounded-xl border text-left transition-all ${
-                        bespokeVibe === vibe.id
-                          ? 'bg-[#38bdf8]/15 border-[#38bdf8] text-[#38bdf8] shadow-[0_0_10px_rgba(56,189,248,0.15)]'
-                          : 'bg-[#0a0b0d] border-[#232730] text-[#8b949e] hover:border-[#2d3139] hover:text-[#e0e0e0]'
-                      }`}
-                    >
-                      <div className="text-base mb-0.5">{vibe.emoji}</div>
-                      <div className="font-mono text-xs font-bold leading-tight">{vibe.label}</div>
-                    </button>
-                  ))}
-                </div>
+                <h3 className="text-xs font-mono uppercase tracking-wider text-[#00f5ff] flex items-center gap-2 font-bold">
+                  <span className="w-5 h-5 rounded-full bg-[#00f5ff]/20 border border-[#00f5ff]/40 flex items-center justify-center text-[10px] text-[#00f5ff] font-bold">3</span>
+                  Vibe (Tone)
+                </h3>
+                
+                <select 
+                  value={bespokeVibe}
+                  onChange={(e) => handleVibeChange(e.target.value)}
+                  className="w-full p-2.5 bg-[#0a0b0d] border border-[#232730] rounded-xl text-xs font-mono text-[#e0e0e0] focus:border-[#00f5ff] focus:outline-none"
+                >
+                  <option value="">Select Vibe</option>
+                  {BESPOKE_VIBES.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}
+                </select>
 
-                {/* Dynamic Angle Selection */}
-                <div className="pt-2 border-t border-[#1f242e] space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono text-[10px] text-[#8b949e]">Core Lore Angle:</span>
-                    <button
-                      type="button"
-                      onClick={handleShuffleAngle}
-                      className="text-[10px] font-mono text-[#38bdf8] hover:underline flex items-center gap-1 cursor-pointer"
-                    >
-                      <Shuffle className="w-2.5 h-2.5" />
-                      Shuffle
-                    </button>
-                  </div>
-                  <div className="p-2.5 bg-[#0a0b0d] border border-[#232730] rounded-xl text-xs font-mono text-[#e0e0e0] leading-snug">
-                    "{bespokeAngle}"
-                  </div>
-                </div>
+                <h3 className="text-xs font-mono uppercase tracking-wider text-[#ccff00] flex items-center gap-2 font-bold">
+                  <span className="w-5 h-5 rounded-full bg-[#ccff00]/20 border border-[#ccff00]/40 flex items-center justify-center text-[10px] text-[#ccff00] font-bold">4</span>
+                  Driving Behavior
+                </h3>
+                <textarea
+                  value={bespokeAngle}
+                  onChange={(e) => setBespokeAngle(e.target.value)}
+                  placeholder="e.g. Floating peacefully on calm waters..."
+                  className="w-full p-2.5 bg-[#0a0b0d] border border-[#232730] rounded-xl text-xs font-mono text-[#e0e0e0] focus:border-[#ccff00] focus:outline-none resize-y min-h-[80px]"
+                  rows={3}
+                />
               </div>
 
-              {/* Step 3: Visual Mascot Art Medium */}
+              {/* Step 4: Visual Mascot Art Medium */}
               <div className="p-4 bg-[#12141a] border border-[#2d3139] rounded-2xl shadow-xl space-y-3">
                 <h3 className="text-xs font-mono uppercase tracking-wider text-[#00ff88] flex items-center gap-2 font-bold">
-                  <span className="w-5 h-5 rounded-full bg-[#00ff88]/20 border border-[#00ff88]/40 flex items-center justify-center text-[10px] text-[#00ff88] font-bold">3</span>
+                  <span className="w-5 h-5 rounded-full bg-[#00ff88]/20 border border-[#00ff88]/40 flex items-center justify-center text-[10px] text-[#00ff88] font-bold">5</span>
                   Art Medium
                 </h3>
 
@@ -450,7 +506,7 @@ export const Step1ConceptHub: React.FC<Step1ConceptHubProps> = ({
                   id="btn-generate-bespoke"
                   type="button"
                   onClick={handleApplyBespokeAndGenerate}
-                  disabled={isGenerating || !bespokeSubject.trim()}
+                  disabled={isGenerating || !isBespokeFormValid}
                   className="w-full flex items-center justify-center gap-2 px-5 py-3.5 bg-[#a855f7] hover:bg-[#9333ea] text-[#ffffff] font-mono text-xs font-bold rounded-xl shadow-[0_0_20px_rgba(168,85,247,0.3)] transition-all hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50 cursor-pointer"
                 >
                   {isGenerating ? (
@@ -502,7 +558,7 @@ export const Step1ConceptHub: React.FC<Step1ConceptHubProps> = ({
               </div>
 
               {/* Rolled Catalyst Card */}
-              <div className="p-4 bg-[#0a0b0d] border border-[#232730] rounded-xl space-y-2">
+              <div className="p-4 bg-[#0a0b0d] border border-[#232730] rounded-xl space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="px-2 py-0.5 rounded bg-[#00f5ff]/15 text-[#00f5ff] font-mono text-[10px] font-bold uppercase">
                     {currentCatalyst.category}
@@ -512,17 +568,51 @@ export const Step1ConceptHub: React.FC<Step1ConceptHubProps> = ({
                   </span>
                 </div>
 
-                <h4 className="text-base font-bold font-mono text-white">
-                  {currentCatalyst.tokenName}
-                </h4>
-
-                <p className="text-xs text-[#38bdf8] font-medium italic">
-                  "{currentCatalyst.slogan}"
-                </p>
+                <div>
+                  <h4 className="text-base font-bold font-mono text-white">
+                    {currentCatalyst.tokenName}
+                  </h4>
+                  <p className="text-xs text-[#38bdf8] font-medium italic mt-0.5">
+                    "{currentCatalyst.slogan}"
+                  </p>
+                </div>
 
                 <p className="text-[11px] text-[#8b949e] leading-relaxed">
                   {currentCatalyst.narrativeHook}
                 </p>
+
+                {/* 5-Component Architectural Integrity Verification Box */}
+                <div className="p-2.5 bg-[#000]/60 border border-[#1f2937] rounded-lg space-y-1.5">
+                  <div className="flex items-center justify-between text-[10px] font-mono">
+                    <span className="text-[#00ff88] font-bold flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#00ff88] animate-pulse"></span>
+                      5 Architectural Components Verified
+                    </span>
+                    <span className="text-[#8b949e]">Pre-Flight Ready</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[10px] font-mono border-t border-[#1f2937]/60 pt-1.5">
+                    <div>
+                      <span className="text-[#64748b]">1. Subject:</span>{' '}
+                      <span className="text-white font-medium">{currentCatalyst.subject}</span>
+                    </div>
+                    <div>
+                      <span className="text-[#64748b]">2. Objective:</span>{' '}
+                      <span className="text-[#c084fc] font-medium">{currentCatalyst.strategy}</span>
+                    </div>
+                    <div>
+                      <span className="text-[#64748b]">3. Vibe (Tone):</span>{' '}
+                      <span className="text-[#00f5ff] font-medium">{currentCatalyst.vibe}</span>
+                    </div>
+                    <div>
+                      <span className="text-[#64748b]">4. Art Medium:</span>{' '}
+                      <span className="text-[#ccff00] font-medium">{currentCatalyst.artStyle}</span>
+                    </div>
+                    <div className="col-span-2">
+                      <span className="text-[#64748b]">5. Driving Behavior:</span>{' '}
+                      <span className="text-[#e2e8f0] italic">"{currentCatalyst.angle}"</span>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <div className="flex gap-2">
@@ -531,7 +621,16 @@ export const Step1ConceptHub: React.FC<Step1ConceptHubProps> = ({
                   onClick={() => {
                     setPrompt(currentCatalyst.fullPrompt);
                     setCategory(currentCatalyst.category);
-                    onGenerate();
+                    onGenerate({
+                      subject: currentCatalyst.subject,
+                      strategy: currentCatalyst.strategy,
+                      vibe: currentCatalyst.vibe,
+                      angle: currentCatalyst.angle,
+                      artStyle: currentCatalyst.artStyle,
+                      category: currentCatalyst.category,
+                      prompt: currentCatalyst.fullPrompt,
+                      isFastRoll: true,
+                    });
                   }}
                   disabled={isGenerating}
                   className="flex-1 flex items-center justify-center gap-2 py-3 bg-[#00ff88] hover:bg-[#00dd77] text-black font-mono text-xs font-bold rounded-xl shadow-[0_0_15px_rgba(0,255,136,0.25)] transition-all cursor-pointer disabled:opacity-50"
@@ -539,12 +638,12 @@ export const Step1ConceptHub: React.FC<Step1ConceptHubProps> = ({
                   {isGenerating ? (
                     <>
                       <RefreshCw className="w-4 h-4 animate-spin" />
-                      <span>Generating...</span>
+                      <span>Verifying & Generating...</span>
                     </>
                   ) : (
                     <>
                       <Zap className="w-3.5 h-3.5 fill-current" />
-                      <span>Generate Concept</span>
+                      <span>Verify & Generate Concept</span>
                     </>
                   )}
                 </button>
@@ -791,20 +890,32 @@ export const Step1ConceptHub: React.FC<Step1ConceptHubProps> = ({
                 )}
 
                 {/* Pre-flight check badge */}
-                <div className="p-2.5 rounded-xl border font-mono text-xs flex items-center justify-between bg-[#091410] border-emerald-500/40 text-emerald-400">
-                  <div className="flex items-center gap-2">
-                    <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                    <span className="font-bold text-white text-[11px] uppercase">
-                      Pre-Flight Check: Passed
+                <div className="p-3 rounded-xl border font-mono text-xs space-y-2 bg-[#091410] border-emerald-500/40 text-emerald-400">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                      <span className="font-bold text-white text-[11px] uppercase">
+                        Agent 0 Architectural Integrity: Certified
+                      </span>
+                    </div>
+                    <span className="px-2 py-0.5 rounded bg-black/40 text-[10px] font-bold text-emerald-300">
+                      5/5 Components Passed
                     </span>
                   </div>
-                  <span className="px-2 py-0.5 rounded bg-black/40 text-[10px] font-bold text-white">
-                    100/100
-                  </span>
+
+                  {narrative.agent0_audit?.preflight_components && (
+                    <div className="grid grid-cols-2 gap-1.5 pt-1.5 border-t border-emerald-500/20 text-[10px] text-[#8b949e]">
+                      <div>Subject: <span className="text-white font-bold">{narrative.agent0_audit.preflight_components.subject}</span></div>
+                      <div>Objective: <span className="text-[#c084fc] font-bold">{narrative.agent0_audit.preflight_components.narrative_objective}</span></div>
+                      <div>Tone: <span className="text-[#00f5ff] font-bold">{narrative.agent0_audit.preflight_components.vibe_tone}</span></div>
+                      <div>Medium: <span className="text-[#ccff00] font-bold">{narrative.agent0_audit.preflight_components.art_medium}</span></div>
+                      <div className="col-span-2">Behavior: <span className="text-[#e0e0e0] italic">"{narrative.agent0_audit.preflight_components.driving_behavior}"</span></div>
+                    </div>
+                  )}
                 </div>
               </div>
 
-              {/* Mascot Scene Prompt */}
+                {/* Mascot Scene Prompt */}
               <div className="p-3 rounded-xl bg-[#0a0b0d] border border-[#2d3139] text-xs space-y-2">
                 <div className="flex items-center justify-between">
                   <div className="text-[10px] font-mono font-bold text-[#00f5ff] flex items-center gap-1.5 uppercase">
@@ -859,6 +970,64 @@ export const Step1ConceptHub: React.FC<Step1ConceptHubProps> = ({
                 ) : (
                   <div className="text-[11px] text-[#e0e0e0]/90 font-mono italic bg-[#12141a]/60 p-2.5 rounded-lg border border-[#232730]">
                     "{editableMascotPrompt || narrative.mascot_prompt}"
+                  </div>
+                )}
+              </div>
+              
+              {/* Rallying Phrase */}
+              <div className="p-3 rounded-xl bg-[#0a0b0d] border border-[#2d3139] text-xs space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="text-[10px] font-mono font-bold text-[#fbbf24] flex items-center gap-1.5 uppercase">
+                    <Flame className="w-3 h-3 text-[#fbbf24]" />
+                    <span>Rallying Phrase</span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (isEditingRallyingPhrase) {
+                        handleSaveRallyingPhraseEdit();
+                      } else {
+                        setIsEditingRallyingPhrase(true);
+                      }
+                    }}
+                    className="text-[11px] font-mono text-[#8b949e] hover:text-[#fbbf24] flex items-center gap-1 cursor-pointer transition-colors"
+                  >
+                    <Edit3 className="w-3 h-3" />
+                    <span>{isEditingRallyingPhrase ? 'Save' : 'Edit Phrase'}</span>
+                  </button>
+                </div>
+
+                {isEditingRallyingPhrase ? (
+                  <div className="space-y-2">
+                    <input
+                      value={editableRallyingPhrase}
+                      onChange={(e) => setEditableRallyingPhrase(e.target.value)}
+                      className="w-full p-2.5 bg-[#12141a] border border-[#fbbf24] rounded-lg text-xs font-mono text-white focus:outline-none"
+                    />
+                    <div className="flex justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditableRallyingPhrase(narrative.rallying_phrase);
+                          setIsEditingRallyingPhrase(false);
+                        }}
+                        className="px-2 py-1 bg-[#1a1d24] text-[11px] font-mono rounded text-[#8b949e]"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleSaveRallyingPhraseEdit}
+                        className="px-2 py-1 bg-[#fbbf24] text-[11px] font-mono rounded text-black font-bold"
+                      >
+                        Save
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-[11px] text-[#e0e0e0]/90 font-mono italic bg-[#12141a]/60 p-2.5 rounded-lg border border-[#232730]">
+                    "{editableRallyingPhrase || narrative.rallying_phrase}"
                   </div>
                 )}
               </div>

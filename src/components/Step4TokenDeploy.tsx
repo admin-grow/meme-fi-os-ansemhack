@@ -8,6 +8,7 @@ import {
   Terminal,
   ExternalLink,
   ArrowRight,
+  ArrowLeft,
   Zap,
   Flame,
   Lock,
@@ -34,16 +35,21 @@ import {
   Send,
   Globe,
   Share2,
+  Repeat,
+  Sparkles,
+  TrendingUp,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { SecurityAuditDrawer } from './SecurityAuditDrawer';
 import { OnChainInscriptionModule } from './OnChainInscriptionModule';
+import { PreFlightConfirmationModal } from './PreFlightConfirmationModal';
 
 interface Step4TokenDeployProps {
   narrative: Agent1NarrativeResult;
   deployment: TokenDeploymentData | null;
   onDeploySuccess: (data: TokenDeploymentData) => void;
   onNext: () => void;
+  onBack?: () => void;
   mascotSvg?: string;
 }
 
@@ -52,6 +58,7 @@ export const Step4TokenDeploy: React.FC<Step4TokenDeployProps> = ({
   deployment,
   onDeploySuccess,
   onNext,
+  onBack,
   mascotSvg,
 }) => {
   const {
@@ -83,7 +90,10 @@ export const Step4TokenDeploy: React.FC<Step4TokenDeployProps> = ({
   // On-Chain Verification & Anti-Snipe Protection
   const [jitoAntiSnipe, setJitoAntiSnipe] = useState<boolean>(true);
   const [isAuditDrawerOpen, setIsAuditDrawerOpen] = useState<boolean>(false);
+  const [isConfirmModalOpen, setIsConfirmModalOpen] = useState<boolean>(false);
   const [showAdvanced, setShowAdvanced] = useState<boolean>(false);
+  const [simulatedDailyVolumeSol, setSimulatedDailyVolumeSol] = useState<number>(250);
+  const [showFlywheelBreakdown, setShowFlywheelBreakdown] = useState<boolean>(true);
 
   // Official Social Channels & Community Handles (Pre-flight Creator Binding)
   const cleanTicker = narrative.ticker.replace('$', '').toLowerCase();
@@ -588,6 +598,155 @@ export const Step4TokenDeploy: React.FC<Step4TokenDeployProps> = ({
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* ClawPump AnsemHack Dynamic Flywheel Mechanism Card */}
+          <div className="mt-3 p-3.5 rounded-xl bg-[#0b0e14] border border-[#20293a] space-y-3 font-mono">
+            <div
+              className="flex items-center justify-between cursor-pointer select-none"
+              onClick={() => setShowFlywheelBreakdown(!showFlywheelBreakdown)}
+            >
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-lg bg-[#ccff00]/10 border border-[#ccff00]/30 flex items-center justify-center text-[#ccff00]">
+                  <Repeat className="w-3.5 h-3.5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-white uppercase tracking-wider">
+                      The ClawPump Flywheel Loop
+                    </span>
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#00f5ff]/10 text-[#00f5ff] border border-[#00f5ff]/30 font-bold">
+                      Dynamic On-Chain
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-[#8e99ac]">
+                    Every trade automatically buys $CLAW &amp; $ANSEM without touching your 75% creator share.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="text-[#8e99ac] hover:text-white p-1 rounded transition-colors"
+              >
+                {showFlywheelBreakdown ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              </button>
+            </div>
+
+            {showFlywheelBreakdown && (
+              <div className="space-y-3 pt-2 border-t border-[#1c2230] text-[11px]">
+                {/* 4-Step Flywheel Flowchart */}
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 text-left">
+                  <div className="p-2 rounded-lg bg-[#121620] border border-[#1e2536] space-y-1">
+                    <div className="flex items-center gap-1.5 text-[#00f5ff] font-bold text-[10px]">
+                      <span>01</span>
+                      <span>You Trade</span>
+                    </div>
+                    <p className="text-[10px] text-[#8e99ac] leading-tight font-sans">
+                      {narrative.ticker} trades on ClawPump bonding curve.
+                    </p>
+                  </div>
+
+                  <div className="p-2 rounded-lg bg-[#121620] border border-[#1e2536] space-y-1">
+                    <div className="flex items-center gap-1.5 text-amber-400 font-bold text-[10px]">
+                      <span>02</span>
+                      <span>Fees Accrue</span>
+                    </div>
+                    <p className="text-[10px] text-[#8e99ac] leading-tight font-sans">
+                      You keep 75% fee share. ClawPump retains 25% protocol fee.
+                    </p>
+                  </div>
+
+                  <div className="p-2 rounded-lg bg-[#121620] border border-[#1e2536] space-y-1">
+                    <div className="flex items-center gap-1.5 text-[#39ff14] font-bold text-[10px]">
+                      <span>03</span>
+                      <span>Buys on Book</span>
+                    </div>
+                    <p className="text-[10px] text-[#8e99ac] leading-tight font-sans">
+                      25% of protocol share market-buys $CLAW &amp; $ANSEM (50/50).
+                    </p>
+                  </div>
+
+                  <div className="p-2 rounded-lg bg-[#121620] border border-[#1e2536] space-y-1">
+                    <div className="flex items-center gap-1.5 text-purple-400 font-bold text-[10px]">
+                      <span>04</span>
+                      <span>Builders Paid</span>
+                    </div>
+                    <p className="text-[10px] text-[#8e99ac] leading-tight font-sans">
+                      Funds next cohort rewards, driving fresh teams &amp; volume.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Interactive Dynamic Calculator */}
+                <div className="p-3 rounded-xl bg-[#0e121a] border border-[#1e273a] space-y-2.5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <TrendingUp className="w-3.5 h-3.5 text-[#ccff00]" />
+                      <span className="text-[11px] font-bold text-white uppercase">
+                        Dynamic Flywheel Simulator
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-[#8e99ac]">Simulated 24h Volume:</span>
+                      <span className="text-xs font-bold text-[#ccff00]">{simulatedDailyVolumeSol} SOL</span>
+                    </div>
+                  </div>
+
+                  <input
+                    type="range"
+                    min="25"
+                    max="2500"
+                    step="25"
+                    value={simulatedDailyVolumeSol}
+                    onChange={(e) => setSimulatedDailyVolumeSol(Number(e.target.value))}
+                    className="w-full accent-[#ccff00] cursor-pointer h-1.5 bg-[#1a2030] rounded-lg"
+                  />
+
+                  {/* Calculated Values */}
+                  {(() => {
+                    const totalFeeSol = simulatedDailyVolumeSol * 0.01; // 1% bonding curve fee
+                    const creatorShareSol = totalFeeSol * 0.75;
+                    const protocolFeeSol = totalFeeSol * 0.25;
+                    const buybackPoolSol = protocolFeeSol * 0.25; // 25% of ClawPump's 25%
+                    const clawBuySol = buybackPoolSol * 0.5;
+                    const ansemBuySol = buybackPoolSol * 0.5;
+
+                    return (
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+                        <div className="p-2 rounded-lg bg-[#141824] border border-[#242e42]">
+                          <div className="text-[9px] text-[#8e99ac] uppercase">Your Share (75%)</div>
+                          <div className="text-xs font-bold text-emerald-400">+{creatorShareSol.toFixed(3)} SOL</div>
+                          <div className="text-[8px] text-[#6c788d]">100% untouched</div>
+                        </div>
+
+                        <div className="p-2 rounded-lg bg-[#141824] border border-[#242e42]">
+                          <div className="text-[9px] text-[#8e99ac] uppercase">Claw Protocol (25%)</div>
+                          <div className="text-xs font-bold text-slate-300">{protocolFeeSol.toFixed(3)} SOL</div>
+                          <div className="text-[8px] text-[#6c788d]">Platform fee</div>
+                        </div>
+
+                        <div className="p-2 rounded-lg bg-[#141824] border border-[#242e42]">
+                          <div className="text-[9px] text-[#8e99ac] uppercase">Dynamic $CLAW Buy</div>
+                          <div className="text-xs font-bold text-[#00f5ff]">+{clawBuySol.toFixed(4)} SOL</div>
+                          <div className="text-[8px] text-[#6c788d]">Open-market buy</div>
+                        </div>
+
+                        <div className="p-2 rounded-lg bg-[#141824] border border-[#242e42]">
+                          <div className="text-[9px] text-[#8e99ac] uppercase">Dynamic $ANSEM Buy</div>
+                          <div className="text-xs font-bold text-[#ccff00]">+{ansemBuySol.toFixed(4)} SOL</div>
+                          <div className="text-[8px] text-[#6c788d]">50/50 open market</div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  <div className="text-[9px] text-[#8e99ac] italic flex items-center gap-1.5 pt-1">
+                    <Sparkles className="w-3 h-3 text-[#ccff00] shrink-0" />
+                    <span>The 25% buyback comes entirely out of ClawPump&apos;s cut, never your creator or holder reward allocation.</span>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -1114,46 +1273,86 @@ export const Step4TokenDeploy: React.FC<Step4TokenDeployProps> = ({
                 </label>
               </div>
 
-              <button
-                onClick={handleStartDeploy}
-                disabled={isDeploying || !hitlCheck1 || !hitlCheck2 || !hitlCheck3 || !hitlCheckSocials || hasInsufficientBalance}
-                className={`py-3 px-6 rounded font-bold text-xs uppercase tracking-tight flex items-center justify-center gap-2 transition-all cursor-pointer shrink-0 ${
-                  isDeploying || !hitlCheck1 || !hitlCheck2 || !hitlCheck3 || !hitlCheckSocials || hasInsufficientBalance
-                    ? 'bg-[#1a1d24] text-slate-500 cursor-not-allowed border border-[#2d3139]'
-                    : 'bg-[#ccff00] text-black hover:bg-[#e0ff4f] shadow-[0_0_20px_rgba(204,255,0,0.25)]'
-                }`}
-              >
-                {isDeploying ? (
-                  <>
-                    <div className="w-3.5 h-3.5 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
-                    <span>Signing...</span>
-                  </>
-                ) : (
-                  <>
-                    <Zap className="w-3.5 h-3.5 fill-black" />
-                    <span>Deploy Token</span>
-                  </>
+              <div className="flex items-center gap-2">
+                {onBack && !isDeploying && (
+                  <button
+                    type="button"
+                    onClick={onBack}
+                    className="py-3 px-4 bg-[#141824] hover:bg-[#1f2638] text-[#e0e0e0] hover:text-white border border-[#2d354a] font-bold text-xs uppercase tracking-tight rounded flex items-center gap-1.5 transition-all cursor-pointer font-mono"
+                  >
+                    <ArrowLeft className="w-4 h-4 text-[#00f5ff]" />
+                    <span>← Back to Visuals</span>
+                  </button>
                 )}
-              </button>
+
+                <button
+                  onClick={() => setIsConfirmModalOpen(true)}
+                  disabled={isDeploying || !hitlCheck1 || !hitlCheck2 || !hitlCheck3 || !hitlCheckSocials || hasInsufficientBalance}
+                  className={`py-3 px-6 rounded font-bold text-xs uppercase tracking-tight flex items-center justify-center gap-2 transition-all cursor-pointer shrink-0 ${
+                    isDeploying || !hitlCheck1 || !hitlCheck2 || !hitlCheck3 || !hitlCheckSocials || hasInsufficientBalance
+                      ? 'bg-[#1a1d24] text-slate-500 cursor-not-allowed border border-[#2d3139]'
+                      : 'bg-[#ccff00] text-black hover:bg-[#e0ff4f] shadow-[0_0_20px_rgba(204,255,0,0.25)]'
+                  }`}
+                >
+                  {isDeploying ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
+                      <span>Signing...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Zap className="w-3.5 h-3.5 fill-black" />
+                      <span>Deploy Token</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           ) : (
             <div className="w-full flex flex-col sm:flex-row items-center justify-between gap-4">
-              <div className="flex items-center gap-2 text-xs text-[#e0e0e0] opacity-90 font-mono">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#39ff14] animate-pulse"></span>
-                <span>Token live on Solana</span>
+              <div className="flex items-center gap-3 text-xs text-[#e0e0e0] opacity-90 font-mono">
+                {onBack && (
+                  <button
+                    type="button"
+                    onClick={onBack}
+                    className="py-2 px-3 bg-[#141824] hover:bg-[#1f2638] text-[#e0e0e0] hover:text-white border border-[#2d354a] font-bold text-xs uppercase tracking-tight rounded-lg flex items-center gap-1.5 transition-all cursor-pointer font-mono"
+                  >
+                    <ArrowLeft className="w-3.5 h-3.5 text-[#00f5ff]" />
+                    <span>← Edit Visuals</span>
+                  </button>
+                )}
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#39ff14] animate-pulse"></span>
+                  <span>Token live on Solana</span>
+                </div>
               </div>
 
               <button
                 onClick={onNext}
-                className="w-full sm:w-auto py-3 px-6 bg-[#00f5ff] text-black font-bold text-xs uppercase tracking-tight rounded-xl hover:bg-[#b2faff] shadow-[0_0_20px_rgba(0,245,255,0.3)] flex items-center justify-center gap-2 transition-all cursor-pointer shrink-0"
+                className="w-full sm:w-auto py-3 px-6 bg-[#00f5ff] text-black font-bold text-xs uppercase tracking-tight rounded-xl hover:bg-[#b2faff] shadow-[0_0_20px_rgba(0,245,255,0.3)] flex items-center justify-center gap-2 transition-all cursor-pointer shrink-0 font-mono"
               >
-                <span>Continue</span>
+                <span>Continue to Community Cockpit</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
             </div>
           )}
         </div>
       </div>
+
+      {/* Pre-Flight Confirmation Gate Modal */}
+      <PreFlightConfirmationModal
+        isOpen={isConfirmModalOpen}
+        onClose={() => setIsConfirmModalOpen(false)}
+        onConfirmDeploy={handleStartDeploy}
+        tokenName={narrative.token_name}
+        ticker={narrative.ticker}
+        network={network}
+        initialBuySol={initialBuySol}
+        totalCostSol={totalEstimatedCostSol}
+        rewardModel={rewardModel}
+        creatorFeePercent={creatorFeePercent}
+        jitoEnabled={jitoAntiSnipe}
+      />
 
       {/* QuickBooks-Style Slide-Over Security Audit Drawer */}
       <SecurityAuditDrawer

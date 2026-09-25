@@ -9,7 +9,8 @@ import {
   Shield, 
   Layers, 
   HelpCircle,
-  Laptop
+  Laptop,
+  Database
 } from 'lucide-react';
 import { ConnectWalletButton } from './ConnectWalletButton';
 
@@ -21,6 +22,7 @@ interface HeaderProps {
   onOpenMobileSidebar?: () => void;
   onNavigateToSection?: (sectionId: string) => void;
   onOpenWhitepaper?: () => void;
+  onOpenDatabaseModal?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -31,6 +33,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenMobileSidebar,
   onNavigateToSection,
   onOpenWhitepaper,
+  onOpenDatabaseModal,
 }) => {
   const [isLandingDropdownOpen, setIsLandingDropdownOpen] = useState<boolean>(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -256,6 +259,19 @@ export const Header: React.FC<HeaderProps> = ({
             >
               <BookOpen className="w-3.5 h-3.5 text-[#00f5ff]" />
               <span>Whitepaper</span>
+            </button>
+          )}
+
+          {/* Firestore Database Generations Button */}
+          {onOpenDatabaseModal && (
+            <button
+              type="button"
+              onClick={onOpenDatabaseModal}
+              className="px-3 py-1.5 text-xs font-mono font-bold rounded-lg text-emerald-400 hover:bg-emerald-500/15 hover:text-white border border-emerald-500/30 flex items-center gap-1.5 transition-all cursor-pointer"
+              title="View Firestore Database Collections & Recent Generations"
+            >
+              <Database className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Database</span>
             </button>
           )}
         </nav>

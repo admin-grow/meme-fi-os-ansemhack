@@ -237,7 +237,10 @@ export const DynamicTokenMicroSite: React.FC<DynamicTokenMicroSiteProps> = ({
 
   const pumpFunBuyUrl = `https://pump.fun/coin/${contractAddress}`;
   const dexScreenerUrl = `https://dexscreener.com/solana/${contractAddress}`;
-  const solscanUrl = `https://solscan.io/token/${contractAddress}?cluster=devnet`;
+  const isMainnet = propDeployment?.solanaNetwork === 'mainnet' || (!contractAddress.includes('pump') && (contractAddress.startsWith('MFCAT') || contractAddress.startsWith('HITL')));
+  const solscanUrl = isMainnet 
+    ? `https://solscan.io/token/${contractAddress}`
+    : `https://solscan.io/token/${contractAddress}?cluster=devnet`;
 
   const microFaqs = [
     {

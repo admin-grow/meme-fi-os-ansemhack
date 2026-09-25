@@ -64,6 +64,14 @@ export interface Agent0AuditSummary {
   log_id?: string;
   compliance_score: number;
   triggers?: string[];
+  preflight_components?: {
+    subject: string;
+    narrative_objective: string;
+    vibe_tone: string;
+    driving_behavior: string;
+    art_medium: string;
+    is_crypto_persona?: boolean;
+  };
 }
 
 export interface Agent1NarrativeResult {
@@ -72,6 +80,7 @@ export interface Agent1NarrativeResult {
   token_name: string;
   ticker: string;
   tagline: string;
+  rallying_phrase?: string;
   viral_score: number;
   lore: string;
   tweet_pack: string[];
@@ -258,12 +267,12 @@ export interface SwarmLogEvent {
 // Superadmin Guardian & Platform Metrics Interfaces
 // -------------------------------------------------------------
 
-export interface PythFeedTelemetry {
-  ticker: string;
-  price: number;
-  change24h: number;
+export interface RpcNodeTelemetry {
+  endpoint: string;
+  region: string;
+  tps: number;
   latencyMs: number;
-  status: 'HEALTHY' | 'SYNCING' | 'STALE';
+  status: 'HEALTHY' | 'SYNCING' | 'DEGRADED';
 }
 
 export interface SuperadminHallucinationLog {
@@ -292,7 +301,7 @@ export interface SuperadminMetrics {
   tokensDeployedTotal: number;
   lpBurnedCount: number;
   hitlApprovalsStamped: number;
-  activePythFeeds: PythFeedTelemetry[];
+  activeRpcNodes: RpcNodeTelemetry[];
 }
 
 export interface SuperadminCircuitBreakers {

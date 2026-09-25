@@ -1,0 +1,84 @@
+{
+  "entities": {
+    "RecentGeneration": {
+      "title": "RecentGeneration",
+      "description": "Stores completed autonomous meme coin campaigns and generation assets.",
+      "type": "object",
+      "properties": {
+        "token_name": { "type": "string", "description": "Token display name." },
+        "ticker": { "type": "string", "description": "Token ticker symbol." },
+        "tagline": { "type": "string", "description": "Memetic slogan or tagline." },
+        "category": { "type": "string", "description": "Spark category." },
+        "prompt": { "type": "string", "description": "Original generation prompt." },
+        "mascot_prompt": { "type": "string", "description": "Prompt for mascot visual generation." },
+        "rallying_phrase": { "type": "string", "description": "Community rallying cry." },
+        "viral_score": { "type": "number", "description": "Meme potential score 1-100." },
+        "createdAt": { "type": "string", "description": "ISO timestamp of generation." }
+      },
+      "required": ["token_name", "ticker", "tagline", "createdAt"]
+    },
+    "NarrativeHistory": {
+      "title": "NarrativeHistory",
+      "description": "Stores previous narrative strategies to ensure future variety.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Identifier for the user or project context." },
+        "strategy": { "type": "string", "description": "The narrative strategy used." },
+        "aesthetic": { "type": "string", "description": "The aesthetic domain chosen." },
+        "createdAt": { "type": "string", "description": "ISO timestamp." }
+      },
+      "required": ["userId", "strategy", "aesthetic", "createdAt"]
+    },
+    "CampaignCache": {
+      "title": "CampaignCache",
+      "description": "Stores cached generation outputs indexed by input hash.",
+      "type": "object",
+      "properties": {
+        "createdAt": { "type": "string", "description": "ISO timestamp of cache creation." }
+      },
+      "required": ["createdAt"]
+    },
+    "BrandingSignature": {
+      "title": "BrandingSignature",
+      "description": "Unique cryptographic signature hashes to prevent duplicate lore.",
+      "type": "object",
+      "properties": {
+        "createdAt": { "type": "string", "description": "ISO timestamp." }
+      },
+      "required": ["createdAt"]
+    },
+    "UserAsset": {
+      "title": "UserAsset",
+      "description": "Stores user-created assets linked to a wallet.",
+      "type": "object",
+      "properties": {
+        "walletAddress": { "type": "string", "description": "The user wallet address." },
+        "assetData": { "type": "string", "description": "The vector/image data." },
+        "createdAt": { "type": "string", "description": "ISO timestamp." }
+      },
+      "required": ["walletAddress", "assetData", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/recent_generations/{genId}": {
+      "schema": "RecentGeneration",
+      "description": "Collection of recent token generation campaigns."
+    },
+    "/narrative_history/{historyId}": {
+      "schema": "NarrativeHistory",
+      "description": "Collection of past narratives."
+    },
+    "/campaign_cache/{cacheId}": {
+      "schema": "CampaignCache",
+      "description": "Cached campaign results by hash."
+    },
+    "/branding_signatures/{signatureId}": {
+      "schema": "BrandingSignature",
+      "description": "Signatures preventing narrative duplication."
+    },
+    "/users/{walletAddress}/assets/{assetId}": {
+      "schema": "UserAsset",
+      "description": "Collection of user-created assets per wallet."
+    }
+  }
+}

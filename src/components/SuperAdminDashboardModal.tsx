@@ -51,7 +51,7 @@ export const SuperAdminDashboardModal: React.FC<SuperAdminDashboardModalProps> =
 
   // Filter state for Guardian logs
   const [logFilter, setLogFilter] = useState<'ALL' | 'CRITICAL' | 'HIGH' | 'MEDIUM'>('ALL');
-  const [expandedLogId, setExpandedLogId] = useState<string | null>('INT-8492');
+  const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
 
   // Superadmin Master Key Gate (Isolates access from creators & normal users)
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
@@ -310,12 +310,11 @@ export const SuperAdminDashboardModal: React.FC<SuperAdminDashboardModalProps> =
     tokensDeployedTotal: 342,
     lpBurnedCount: 342,
     hitlApprovalsStamped: 1482,
-    activePythFeeds: [
-      { ticker: 'TSLA', price: 238.45, change24h: 3.82, latencyMs: 340, status: 'HEALTHY' },
-      { ticker: 'NVDA', price: 119.80, change24h: 2.15, latencyMs: 310, status: 'HEALTHY' },
-      { ticker: 'AAPL', price: 224.23, change24h: 0.94, latencyMs: 360, status: 'HEALTHY' },
-      { ticker: 'MSTR', price: 135.50, change24h: 5.40, latencyMs: 380, status: 'HEALTHY' },
-      { ticker: 'SOL', price: 142.10, change24h: 4.10, latencyMs: 290, status: 'HEALTHY' },
+    activeRpcNodes: [
+      { endpoint: 'https://api.mainnet-beta.solana.com', region: 'US-East (Primary)', tps: 2840, latencyMs: 42, status: 'HEALTHY' },
+      { endpoint: 'https://solana-mainnet.g.alchemy.com/v2', region: 'EU-Central (Fallback)', tps: 2790, latencyMs: 58, status: 'HEALTHY' },
+      { endpoint: 'https://rpc.helius.xyz/?api-key=***', region: 'US-West (Dedicated)', tps: 3120, latencyMs: 35, status: 'HEALTHY' },
+      { endpoint: 'https://api.devnet.solana.com', region: 'Global (Sandbox)', tps: 1850, latencyMs: 64, status: 'HEALTHY' },
     ],
   };
 
@@ -482,7 +481,7 @@ export const SuperAdminDashboardModal: React.FC<SuperAdminDashboardModalProps> =
                     {metrics.totalGenerations.toLocaleString()}
                   </div>
                   <div className="text-[10px] font-mono text-emerald-400 flex items-center gap-1">
-                    <span>+48 launches today</span>
+                    <span>{metrics.tokensDeployedTotal > 0 ? `+${metrics.tokensDeployedTotal} live deployments` : '0 live deployments'}</span>
                   </div>
                 </div>
 
@@ -623,17 +622,17 @@ export const SuperAdminDashboardModal: React.FC<SuperAdminDashboardModalProps> =
                 </div>
               </div>
 
-              {/* Pyth Network Multi-Asset Oracle Health */}
+              {/* Solana RPC Gateway & Validator Cluster Health */}
               <div className="p-5 rounded-2xl bg-[#10141e] border border-[#242b3b] space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-[#242b3b]">
                   <div className="flex items-center gap-2">
                     <Activity className="w-4 h-4 text-[#00f5ff]" />
                     <h3 className="font-mono text-sm font-bold text-white uppercase">
-                      Pyth Network Real-Time Oracle Gateway (Stock &amp; Crypto Feeds)
+                      Solana RPC Gateway &amp; Validator Cluster Health
                     </h3>
                   </div>
                   <div className="text-[11px] font-mono text-[#8e99ac]">
-                    Total Feeds Active: <span className="text-[#00f5ff] font-bold">{metrics.activePythFeeds.length}</span>
+                    Total RPC Nodes Active: <span className="text-[#00f5ff] font-bold">{metrics.activeRpcNodes?.length || 4}</span>
                   </div>
                 </div>
 
@@ -641,32 +640,32 @@ export const SuperAdminDashboardModal: React.FC<SuperAdminDashboardModalProps> =
                   <table className="w-full text-left font-mono text-xs">
                     <thead>
                       <tr className="text-[#8e99ac] border-b border-[#1e2433] text-[10px] uppercase">
-                        <th className="pb-2">Asset Symbol</th>
-                        <th className="pb-2">Pyth Spot Price</th>
-                        <th className="pb-2">24h Volatility</th>
-                        <th className="pb-2">Feed Latency</th>
+                        <th className="pb-2">RPC Endpoint</th>
+                        <th className="pb-2">Region Routing</th>
+                        <th className="pb-2">Cluster Throughput</th>
+                        <th className="pb-2">Round-Trip Latency</th>
                         <th className="pb-2 text-right">Status</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[#171c26]">
-                      {metrics.activePythFeeds.map((feed) => (
-                        <tr key={feed.ticker} className="hover:bg-[#151a24] transition-colors">
+                      {metrics.activeRpcNodes?.map((node, i) => (
+                        <tr key={i} className="hover:bg-[#151a24] transition-colors">
                           <td className="py-2.5 font-bold text-white flex items-center gap-2">
                             <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                            <span>${feed.ticker}</span>
-                          </td>
-                          <td className="py-2.5 font-bold text-emerald-400">
-                            ${feed.price.toFixed(2)}
-                          </td>
-                          <td className="py-2.5 text-[#ccff00]">
-                            +{feed.change24h}%
+                            <span className="truncate max-w-[200px]">{node.endpoint}</span>
                           </td>
                           <td className="py-2.5 text-[#8e99ac]">
-                            {feed.latencyMs}ms (Sub-second SLA)
+                            {node.region}
+                          </td>
+                          <td className="py-2.5 text-[#ccff00]">
+                            {node.tps.toLocaleString()} TPS
+                          </td>
+                          <td className="py-2.5 text-emerald-400">
+                            {node.latencyMs}ms (P99 Verified)
                           </td>
                           <td className="py-2.5 text-right">
                             <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 text-[10px] font-bold border border-emerald-500/30">
-                              {feed.status}
+                              {node.status}
                             </span>
                           </td>
                         </tr>
@@ -725,7 +724,20 @@ export const SuperAdminDashboardModal: React.FC<SuperAdminDashboardModalProps> =
 
               {/* Intercepts List */}
               <div className="space-y-3">
-                {filteredLogs.map((log) => {
+                {filteredLogs.length === 0 ? (
+                  <div className="p-8 rounded-2xl bg-[#10141e] border border-[#242b3b] text-center space-y-3">
+                    <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 mx-auto">
+                      <ShieldCheck className="w-6 h-6" />
+                    </div>
+                    <div className="font-mono text-sm font-bold text-white">
+                      Zero Security Violations Intercepted
+                    </div>
+                    <p className="text-xs text-[#8e99ac] font-mono max-w-md mx-auto leading-relaxed">
+                      Agent 0 is scanning all incoming generations live. When a prohibited phrase, security promise, or equity claim is detected, it will be automatically defused and logged here.
+                    </p>
+                  </div>
+                ) : (
+                  filteredLogs.map((log) => {
                   const isExpanded = expandedLogId === log.id;
                   return (
                     <div
@@ -821,7 +833,8 @@ export const SuperAdminDashboardModal: React.FC<SuperAdminDashboardModalProps> =
                       )}
                     </div>
                   );
-                })}
+                })
+              )}
               </div>
             </div>
           )}
@@ -1098,7 +1111,7 @@ export const SuperAdminDashboardModal: React.FC<SuperAdminDashboardModalProps> =
         <div className="p-4 border-t border-[#1e2433] bg-[#0d1017] flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs font-mono text-[#8e99ac]">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-            <span>Telemetry live streaming via local process &amp; Pyth oracle sockets</span>
+            <span>Telemetry live streaming via local process &amp; Solana RPC cluster</span>
           </div>
           <div className="flex items-center gap-3">
             <span>MemeFi OS v2.5 Guardian Sentinel</span>

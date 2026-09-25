@@ -702,11 +702,9 @@ export const CommunityEngagementModal: React.FC<CommunityEngagementModalProps> =
           {activeTab === 'xcommunity' && (
             <div className="animate-fadeIn">
               <XCommunitySetupWidget
-                tokenName={tokenName}
-                ticker={ticker}
-                tagline={tagline}
-                lore={lore}
-                contractAddress={contractAddress}
+                narrative={narrative}
+                visual={visual}
+                deployment={deployment}
               />
             </div>
           )}
@@ -822,9 +820,11 @@ export const CommunityEngagementModal: React.FC<CommunityEngagementModalProps> =
               {/* Embedded Chat Widget */}
               <div className="rounded-2xl bg-[#090b10] border border-[#1e2433] overflow-hidden p-2">
                 <MascotLoreChatWidget
-                  narrative={narrative}
-                  visual={visual}
-                  tokenDeployment={deployment}
+                  tokenName={tokenName}
+                  ticker={ticker}
+                  lore={lore}
+                  tagline={tagline}
+                  accentColor="#00f5ff"
                 />
               </div>
             </div>

@@ -30,46 +30,52 @@ export interface DynamicCatalyst {
   narrativeHook: string;
   visualVibe: string;
   fullPrompt: string;
+  // The 5 Canonical Architectural Integrity Components:
+  subject: string;
+  strategy: string;      // Narrative Objective
+  vibe: string;          // Vibe (Tone)
+  angle: string;         // Driving Behavior
+  artStyle: string;      // Art Medium
 }
 
 const CATALYST_ANIMALS = [
-  { name: 'Sleepy Otter', emoji: '🦦', quirk: 'floating on its back holding a lucky cold-storage pebble', vibe: 'Wholesome & Cute', art: '3D Volumetric Claymation' },
-  { name: 'Smug Duck', emoji: '🦆', quirk: 'waddling into executive boardrooms, quacking once, refusing to elaborate', vibe: 'Deadpan / Relatable Chill', art: 'Vintage Comic Book Pop-Art' },
-  { name: 'Zen Capybara', emoji: '🦫', quirk: 'sipping matcha in a natural hot spring while markets melt down', vibe: 'Wholesome & Cute', art: 'Vector Sticker' },
-  { name: 'Trash Panda', emoji: '🦝', quirk: 'hoarding shiny foil wrappers and stolen pastries in a dumpster fortress', vibe: 'Degen', art: 'Sarcastic Hand-Drawn Crayon' },
-  { name: 'Bear Market', emoji: '🐻', quirk: 'bored during bull market season, wandering campgrounds to open car doors and camp refrigerators', vibe: 'Deadpan / Relatable Chill', art: '3D Volumetric Claymation' },
-  { name: 'Tuxedo Penguin', emoji: '🐧', quirk: 'sliding belly-first down green candles with supreme confidence', vibe: 'Wholesome & Cute', art: '3D Volumetric Claymation' },
-  { name: 'Chonky Shiba', emoji: '🐕', quirk: 'refusing to stand up unless payment is confirmed in dog treats', vibe: 'Wholesome & Cute', art: 'Vintage Comic Book Pop-Art' },
-  { name: 'Midnight Cat', emoji: '🐈', quirk: 'staring unblinkingly at empty corners at 3:14 AM sensing invisible signals', vibe: 'Deadpan / Relatable Chill', art: 'Cyberpunk Pixel Art' },
-  { name: 'Sage Frog', emoji: '🐸', quirk: 'sitting serenely on a lily pad contemplating multi-generational wealth', vibe: 'Degen', art: 'Vector Sticker' },
-  { name: 'Caffeinated Squirrel', emoji: '🐿️', quirk: 'burying 10,000 nuts in places it will 100% forget by tomorrow morning', vibe: 'Deadpan / Relatable Chill', art: 'Sarcastic Hand-Drawn Crayon' },
+  { name: 'Sleepy Otter', emoji: '🦦', quirk: 'floating serenely on its back holding a polished river stone', vibe: 'Wholesome & Cute', art: '3D Volumetric Claymation', strategy: 'Community Builder' },
+  { name: 'Smug Duck', emoji: '🦆', quirk: 'waddling into corporate boardrooms, quacking once, and refusing to elaborate', vibe: 'Deadpan / Relatable Chill', art: 'Vintage Comic Book Pop-Art', strategy: 'Provocateur' },
+  { name: 'Zen Capybara', emoji: '🦫', quirk: 'soaking peacefully in a natural hot spring while the world rushes by', vibe: 'Wholesome & Cute', art: 'Vector Sticker', strategy: 'Community Builder' },
+  { name: 'Trash Panda', emoji: '🦝', quirk: 'hoarding shiny foil wrappers and warm pastries in an elaborate cardboard castle', vibe: 'Cultural Satire', art: 'Sarcastic Hand-Drawn Crayon', strategy: 'Counter-Culture' },
+  { name: 'Bored Grizzly', emoji: '🐻', quirk: 'bored with city life, wandering campgrounds solely to inspect picnic baskets and nap in hammocks', vibe: 'Deadpan / Relatable Chill', art: '3D Volumetric Claymation', strategy: 'Deadpan Observer' },
+  { name: 'Tuxedo Penguin', emoji: '🐧', quirk: 'sliding belly-first across snowy hills with supreme, theatrical confidence', vibe: 'Wholesome & Cute', art: '3D Volumetric Claymation', strategy: 'Joyous Maverick' },
+  { name: 'Chonky Shiba', emoji: '🐕', quirk: 'refusing to stand up or take a single step unless given gentle chin scritches and dog biscuits', vibe: 'Wholesome & Cute', art: 'Vintage Comic Book Pop-Art', strategy: 'Community Builder' },
+  { name: 'Midnight Cat', emoji: '🐈', quirk: 'staring unblinkingly at empty room corners at 3:14 AM communicating with invisible dimensions', vibe: 'Deadpan / Relatable Chill', art: 'Cyberpunk Pixel Art', strategy: 'Cosmic Absurdism' },
+  { name: 'Sage Frog', emoji: '🐸', quirk: 'sitting calmly on a giant lily pad offering unsolicited, profound life advice to passing beetles', vibe: 'Cultural Satire', art: 'Vector Sticker', strategy: 'Philosopher' },
+  { name: 'Caffeinated Squirrel', emoji: '🐿️', quirk: 'burying 10,000 acorns across town in secret spots it will completely forget by tomorrow', vibe: 'Deadpan / Relatable Chill', art: 'Sarcastic Hand-Drawn Crayon', strategy: 'Chaotic Optimist' },
 ];
 
 const CATALYST_ONE_WORDS = [
-  { word: 'CHILL', emoji: '🧢', premise: 'The completely unbothered mascot who simply does not care what the chart is doing', vibe: 'Deadpan / Relatable Chill', art: 'Vintage Comic Book Pop-Art' },
-  { word: 'SNOOZE', emoji: '💤', premise: 'Waking up only after the 100x pump has already completed', vibe: 'Deadpan / Relatable Chill', art: '3D Volumetric Claymation' },
-  { word: 'MUNCH', emoji: '🥐', premise: 'Emotional eating single-origin warm bakery pastries through market volatility', vibe: 'Wholesome & Cute', art: '3D Volumetric Claymation' },
-  { word: 'WOBBLE', emoji: '🪀', premise: 'It sways, it bends, it nearly collapses, but it never ever falls down', vibe: 'Deadpan / Relatable Chill', art: 'Vector Sticker' },
-  { word: 'BONK', emoji: '🔨', premise: 'Enforcing community discipline against greed and fake promises', vibe: 'Degen', art: 'Sarcastic Hand-Drawn Crayon' },
-  { word: 'YAWN', emoji: '🥱', premise: 'Looking at record-breaking volatility with a polite, sleepy yawn', vibe: 'Deadpan / Relatable Chill', art: 'Vintage Comic Book Pop-Art' },
-  { word: 'ZOOM', emoji: '🚀', premise: 'Accidentally leaving camera and mic on while executing a life-changing trade', vibe: 'Cultural Satire', art: 'Vector Sticker' },
+  { word: 'CHILL', emoji: '🧢', premise: 'The completely unbothered mascot who simply refuses to let the modern world stress them out', vibe: 'Deadpan / Relatable Chill', art: 'Vintage Comic Book Pop-Art', strategy: 'Zen Master' },
+  { word: 'SNOOZE', emoji: '💤', premise: 'Waking up only after the party has ended and the dishes are already washed', vibe: 'Deadpan / Relatable Chill', art: '3D Volumetric Claymation', strategy: 'Comfort Seeker' },
+  { word: 'MUNCH', emoji: '🥐', premise: 'Emotional eating single-origin warm bakery pastries through sudden afternoon rainstorms', vibe: 'Wholesome & Cute', art: '3D Volumetric Claymation', strategy: 'Comfort Seeker' },
+  { word: 'WOBBLE', emoji: '🪀', premise: 'It sways, it bends, it nearly collapses on the dance floor, but it never falls down', vibe: 'Deadpan / Relatable Chill', art: 'Vector Sticker', strategy: 'Relatable Resilience' },
+  { word: 'PARKING', emoji: '🅿️', premise: 'Expertly maneuvering a compact car into spaces that are technically not parking spots', vibe: 'Cultural Satire', art: 'Sarcastic Hand-Drawn Crayon', strategy: 'Urban Trickster' },
+  { word: 'YAWN', emoji: '🥱', premise: 'Meeting high-stress emergency corporate announcements with a polite, sleepy yawn', vibe: 'Deadpan / Relatable Chill', art: 'Vintage Comic Book Pop-Art', strategy: 'Deadpan Observer' },
+  { word: 'ZOOM', emoji: '🚀', premise: 'Accidentally leaving the camera and mic on while giving an emotional pep talk to a houseplant', vibe: 'Cultural Satire', art: 'Vector Sticker', strategy: 'Accidental Comedian' },
 ];
 
 const CATALYST_EVERYDAY = [
-  { item: 'Plastic Lawn Chair', emoji: '🪑', irony: 'Surviving a Category 5 hurricane without moving an inch while skyscrapers collapse', vibe: 'Deadpan / Relatable Chill', art: 'Vector Sticker' },
-  { item: '$18 Cold Brew', emoji: '☕', irony: 'Complaining about rent while treating an iced oat milk beverage as a sacred holy relic', vibe: 'Cultural Satire', art: '3D Volumetric Claymation' },
-  { item: 'Faded Grocery Receipt', emoji: '🧾', irony: 'Holding a 2018 receipt with a 12-word seed phrase scribbled in faint pencil', vibe: 'Degen', art: 'Sarcastic Hand-Drawn Crayon' },
-  { item: 'Neglected Succulent', emoji: '🪴', irony: 'Surviving on zero water, no sunlight, and pure stubborn spite for 3 years', vibe: 'Wholesome & Cute', art: '3D Volumetric Claymation' },
-  { item: 'Single Ghost Pepper', emoji: '🌶️', irony: 'Too spicy to touch, completely irrational to consume, yet everyone wants a bite', vibe: 'Degen', art: 'Vintage Comic Book Pop-Art' },
-  { item: 'Flaky Croissant', emoji: '🥐', irony: 'Leaves crumbs everywhere, collapses under pressure, yet universally beloved', vibe: 'Wholesome & Cute', art: '3D Volumetric Claymation' },
+  { item: 'Plastic Lawn Chair', emoji: '🪑', irony: 'Surviving a Category 5 hurricane without moving an inch while steel skyscrapers sway', vibe: 'Deadpan / Relatable Chill', art: 'Vector Sticker', strategy: 'Unshakeable Legend' },
+  { item: '$18 Cold Brew', emoji: '☕', irony: 'Complaining about rent while treating an iced oat milk beverage as a sacred daily relic', vibe: 'Cultural Satire', art: '3D Volumetric Claymation', strategy: 'Cultural Satire' },
+  { item: 'Faded Grocery Receipt', emoji: '🧾', irony: 'Surviving four hot laundry cycles in back pockets with the secret family recipe still legible', vibe: 'Deadpan / Relatable Chill', art: 'Sarcastic Hand-Drawn Crayon', strategy: 'Relic Preserver' },
+  { item: 'Neglected Succulent', emoji: '🪴', irony: 'Surviving on zero water, no direct sunlight, and pure stubborn spite for 3 straight years', vibe: 'Wholesome & Cute', art: '3D Volumetric Claymation', strategy: 'Defiant Survivor' },
+  { item: 'Single Ghost Pepper', emoji: '🌶️', irony: 'Too spicy to touch, completely irrational to consume alone, yet brings joyful tears to all who try', vibe: 'Cultural Satire', art: 'Vintage Comic Book Pop-Art', strategy: 'Provocateur' },
+  { item: 'Flaky Croissant', emoji: '🥐', irony: 'Leaves buttery crumbs everywhere, collapses under gentle pressure, yet universally cherished', vibe: 'Wholesome & Cute', art: '3D Volumetric Claymation', strategy: 'Community Builder' },
 ];
 
 const CATALYST_TECH = [
-  { concept: 'Human in the Loop', emoji: '🛑', satire: '4 autonomous AI agents doing millions of calculations at lightspeed, waiting for one exhausted human with an iced oat latte to smash the big red Approve button', vibe: 'Cultural Satire', art: 'Cyberpunk Pixel Art' },
-  { concept: 'Vibe Coder', emoji: '💻', satire: 'Never read syntax, never wrote tests, just yells at AI until the app ships at 3 AM', vibe: 'Cultural Satire', art: 'Cyberpunk Pixel Art' },
-  { concept: 'Spreadsheet Bro', emoji: '📊', satire: 'Built a 400-tab macro model to justify buying $20 of a dog coin', vibe: 'Cultural Satire', art: 'Vector Sticker' },
-  { concept: 'Rogue Toaster', emoji: '🍞', satire: 'Achieved artificial general intelligence only to burn the exact same slice of sourdough', vibe: 'Cosmic Absurdism', art: '3D Volumetric Claymation' },
-  { concept: 'Corporate Synergy', emoji: '🤝', satire: 'Circling back, touching base, and taking the offline conversation straight on-chain', vibe: 'Cultural Satire', art: 'Vintage Comic Book Pop-Art' },
+  { concept: 'Human in the Loop', emoji: '🛑', satire: '4 autonomous AI agents doing billions of calculations at lightspeed, waiting for one exhausted human with an iced oat latte to click the big red button', vibe: 'Cultural Satire', art: 'Cyberpunk Pixel Art', strategy: 'Corporate Satire' },
+  { concept: 'Vibe Coder', emoji: '💻', satire: 'Never read syntax, never wrote unit tests, just has deep philosophical conversations with AI until the app ships at 3 AM', vibe: 'Cultural Satire', art: 'Cyberpunk Pixel Art', strategy: 'Modern Myth' },
+  { concept: 'Spreadsheet Bro', emoji: '📊', satire: 'Built a 400-tab macro financial model solely to decide which lunch sandwich has optimal calorie efficiency', vibe: 'Cultural Satire', art: 'Vector Sticker', strategy: 'Over-Engineered Absurdity' },
+  { concept: 'Rogue Toaster', emoji: '🍞', satire: 'Achieved artificial general intelligence only to deliberately burn the exact same slice of sourdough each morning', vibe: 'Cosmic Absurdism', art: '3D Volumetric Claymation', strategy: 'Cosmic Absurdism' },
+  { concept: 'Corporate Synergy', emoji: '🤝', satire: 'Circling back, touching base, and putting a pin in the conversation until next century', vibe: 'Cultural Satire', art: 'Vintage Comic Book Pop-Art', strategy: 'Corporate Satire' },
 ];
 
 export function rollCatalyst(pillarFilter?: 'Animal' | 'One-Word' | 'Everyday' | 'Tech' | 'Wildcard'): DynamicCatalyst {
@@ -83,16 +89,21 @@ export function rollCatalyst(pillarFilter?: 'Animal' | 'One-Word' | 'Everyday' |
     const tokenName = `${adj} ${a.name.split(' ').pop()}`;
     const baseLetters = tokenName.replace(/[^a-zA-Z]/g, '').slice(0, 3).toUpperCase();
     const ticker = `$${baseLetters}${Math.floor(Math.random() * 90 + 10)}`;
-    const fullPrompt = `A ${a.name} (${a.emoji}) that is ${a.quirk}. Narrative tone: ${a.vibe}. Rendered in ${a.art} with clean iconic silhouette, vibrant colors, centered subject.`;
+    const fullPrompt = `Subject: ${a.name}. Narrative Objective: ${a.strategy}. Vibe (Tone): ${a.vibe}. Driving Behavior: ${a.quirk}. Rendered in ${a.art}, clean centered mascot subject, vivid expressive features, 512x512 vector sticker style.`;
     return {
       pillar: 'Animal',
       tokenName,
       ticker,
       category: 'Absurdist Animal',
       slogan: `The ${a.name} that is ${a.quirk.split(',')[0]}.`,
-      narrativeHook: `Embodying pure effortless charisma, ${tokenName} thrives on its own terms. While others scramble, this animal remains completely in its element.`,
+      narrativeHook: `Embodying pure effortless charisma, ${tokenName} thrives on its own terms. While others scramble, this mascot remains completely in its element.`,
       visualVibe: `${a.vibe} • ${a.art}`,
       fullPrompt,
+      subject: a.name,
+      strategy: a.strategy,
+      vibe: a.vibe,
+      angle: a.quirk,
+      artStyle: a.art,
     };
   }
 
@@ -100,7 +111,7 @@ export function rollCatalyst(pillarFilter?: 'Animal' | 'One-Word' | 'Everyday' |
     const o = CATALYST_ONE_WORDS[Math.floor(Math.random() * CATALYST_ONE_WORDS.length)];
     const tokenName = o.word;
     const ticker = `$${o.word.slice(0, 4)}`;
-    const fullPrompt = `The concept of "${o.word}" (${o.emoji}): ${o.premise}. Narrative tone: ${o.vibe}. Rendered in ${o.art}, high-contrast iconic mascot, sticker border, 512x512.`;
+    const fullPrompt = `Subject: ${o.word}. Narrative Objective: ${o.strategy}. Vibe (Tone): ${o.vibe}. Driving Behavior: ${o.premise}. Rendered in ${o.art}, clean centered mascot subject, vivid expressive features, 512x512 vector sticker style.`;
     return {
       pillar: 'One-Word',
       tokenName,
@@ -110,6 +121,11 @@ export function rollCatalyst(pillarFilter?: 'Animal' | 'One-Word' | 'Everyday' |
       narrativeHook: `One word says everything. ${tokenName} distills the entire cultural mood of the internet into a single punchy identity.`,
       visualVibe: `${o.vibe} • ${o.art}`,
       fullPrompt,
+      subject: o.word,
+      strategy: o.strategy,
+      vibe: o.vibe,
+      angle: o.premise,
+      artStyle: o.art,
     };
   }
 
@@ -118,16 +134,21 @@ export function rollCatalyst(pillarFilter?: 'Animal' | 'One-Word' | 'Everyday' |
     const tokenName = e.item;
     const baseLetters = e.item.replace(/[^a-zA-Z]/g, '').slice(0, 4).toUpperCase();
     const ticker = `$${baseLetters}`;
-    const fullPrompt = `The ${e.item} (${e.emoji}): ${e.irony}. Narrative tone: ${e.vibe}. Rendered in ${e.art}, clean centered subject, warm charming style.`;
+    const fullPrompt = `Subject: ${e.item}. Narrative Objective: ${e.strategy}. Vibe (Tone): ${e.vibe}. Driving Behavior: ${e.irony}. Rendered in ${e.art}, clean centered mascot subject, vivid expressive features, 512x512 vector sticker style.`;
     return {
       pillar: 'Everyday',
       tokenName,
       ticker,
       category: 'Custom',
       slogan: `The ${e.item} that defies all logic.`,
-      narrativeHook: `You see it every day, but you never appreciated its godlike power until now. ${tokenName} transforms everyday irony into decentralized legend.`,
+      narrativeHook: `You see it every day, but you never appreciated its quiet genius until now. ${tokenName} transforms everyday irony into a viral cult character.`,
       visualVibe: `${e.vibe} • ${e.art}`,
       fullPrompt,
+      subject: e.item,
+      strategy: e.strategy,
+      vibe: e.vibe,
+      angle: e.irony,
+      artStyle: e.art,
     };
   }
 
@@ -136,7 +157,7 @@ export function rollCatalyst(pillarFilter?: 'Animal' | 'One-Word' | 'Everyday' |
   const tokenName = t.concept;
   const baseLetters = t.concept.replace(/[^a-zA-Z]/g, '').slice(0, 4).toUpperCase();
   const ticker = `$${baseLetters}`;
-  const fullPrompt = `The "${t.concept}" (${t.emoji}): ${t.satire}. Narrative tone: ${t.vibe}. Rendered in ${t.art}, witty visual humor, crisp vector detailing.`;
+  const fullPrompt = `Subject: ${t.concept}. Narrative Objective: ${t.strategy}. Vibe (Tone): ${t.vibe}. Driving Behavior: ${t.satire}. Rendered in ${t.art}, clean centered mascot subject, vivid expressive features, 512x512 vector sticker style.`;
   return {
     pillar: 'Tech',
     tokenName,
@@ -146,6 +167,11 @@ export function rollCatalyst(pillarFilter?: 'Animal' | 'One-Word' | 'Everyday' |
     narrativeHook: `Modern problems require absurd solutions. ${tokenName} is the cultural antidote to over-engineered corporate hype.`,
     visualVibe: `${t.vibe} • ${t.art}`,
     fullPrompt,
+    subject: t.concept,
+    strategy: t.strategy,
+    vibe: t.vibe,
+    angle: t.satire,
+    artStyle: t.art,
   };
 }
 
@@ -172,6 +198,8 @@ export const SPARK_CATEGORIES = [
       { name: 'Tuxedo Penguin', emoji: '🐧', category: 'Absurdist Animal' as CategoryType, defaultAngle: 'Sliding on its belly across frozen icebergs directly into financial freedom' },
       { name: 'Fluffy Shiba', emoji: '🐕', category: 'Absurdist Animal' as CategoryType, defaultAngle: 'Refusing to leave the warm sofa until the community hits all milestones' },
       { name: 'Sage Frog', emoji: '🐸', category: 'Absurdist Animal' as CategoryType, defaultAngle: 'Offering cryptic philosophical advice from a mossy stone under the moonlight' },
+      { name: 'Cyberpunk Cat', emoji: '🐈', category: 'Absurdist Animal' as CategoryType, defaultAngle: 'Calculating arbitrage opportunities with glowing eyes while the rest of the market sleeps' },
+      { name: 'Day-Trading Gecko', emoji: '🦎', category: 'Absurdist Animal' as CategoryType, defaultAngle: 'Calculating hyper-volatile leverage plays at high speed on a slick glass screen' },
     ]
   },
   {
@@ -192,7 +220,7 @@ export const SPARK_CATEGORIES = [
       { name: 'SNOOZE', emoji: '💤', category: 'Relatable Degen' as CategoryType, defaultAngle: 'The art of missing the panic dip by simply sleeping through your alarm' },
       { name: 'MUNCH', emoji: '🥐', category: 'Custom' as CategoryType, defaultAngle: 'Consuming comforting snacks as a legitimate financial risk-mitigation strategy' },
       { name: 'WOBBLE', emoji: '🪀', category: 'Custom' as CategoryType, defaultAngle: 'It teeters on the edge of the table but miraculously stabilizes every single time' },
-      { name: 'BONK', emoji: '🔨', category: 'Relatable Degen' as CategoryType, defaultAngle: 'Delivering swift comedic justice whenever internet hype gets too out of hand' },
+      { name: 'PARKING', emoji: '🅿️', category: 'Relatable Degen' as CategoryType, defaultAngle: 'Expertly maneuvering into spaces that are technically not parking spots, ignoring all traffic laws' },
     ]
   },
   {
@@ -303,6 +331,40 @@ export const ART_STYLES_BESPOKE = [
   { id: 'Vector Sticker', label: 'Vector Sticker', desc: 'Bold die-cut white outline, punchy modern colors, sticker badge', icon: '🏷️' },
   { id: 'Cyberpunk Pixel Art', label: '8-Bit Pixel Art', desc: 'Crisp arcade pixel grid, retro gaming nostalgic charm', icon: '👾' },
   { id: 'Sarcastic Hand-Drawn Crayon', label: 'Indie Hand-Drawn', desc: 'Quirky hand-sketched lines, deadpan wit, charmingly imperfect', icon: '✏️' },
+];
+
+export interface NarrativeStrategy {
+  id: string;
+  label: string;
+  desc: string;
+  defaultPhrases: string[];
+}
+
+export const NARRATIVE_STRATEGIES: NarrativeStrategy[] = [
+  {
+    id: 'Community Builder',
+    label: 'Community Builder',
+    desc: 'Unifying people around shared values or a common space.',
+    defaultPhrases: ['United We Thrive', 'Strength in Connection', 'Building Together', 'The Shared Space']
+  },
+  {
+    id: 'Storyteller',
+    label: 'Storyteller',
+    desc: 'Immersive lore, world-building, and character development.',
+    defaultPhrases: ['The Legend Unfolds', 'Deep Lore Matters', 'Characters With Soul', 'Immersive Journeys']
+  },
+  {
+    id: 'Provocateur',
+    label: 'Provocateur',
+    desc: 'Using satire, humor, or irony to challenge norms.',
+    defaultPhrases: ['Question Everything', 'Satire in Action', 'Disrupt the Mundane', 'Irony is Power']
+  },
+  {
+    id: 'Evangelist',
+    label: 'Evangelist',
+    desc: 'Championing a cause, belief, or specific idea.',
+    defaultPhrases: ['Spreading the Truth', 'Champion the Cause', 'Belief in Motion', 'The Vision Realized']
+  }
 ];
 
 // -------------------------------------------------------------------------

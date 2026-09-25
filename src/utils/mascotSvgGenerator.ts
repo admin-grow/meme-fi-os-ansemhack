@@ -32,7 +32,9 @@ export function generateVectorMascotSvg(
   // Character Archetypes
   const isHITL = lowerPrompt.includes('hitl') || lowerPrompt.includes('human') || lowerPrompt.includes('loop');
   const isDog = lowerPrompt.includes('dog') || lowerPrompt.includes('shiba') || lowerPrompt.includes('inu') || lowerPrompt.includes('puppy') || lowerPrompt.includes('canine');
-  const isCat = lowerPrompt.includes('cat') || lowerPrompt.includes('kitten') || lowerPrompt.includes('feline') || lowerPrompt.includes('meow');
+  const isCat = lowerPrompt.includes('cat') || lowerPrompt.includes('kitten') || lowerPrompt.includes('feline') || lowerPrompt.includes('meow') || lowerPrompt.includes('mfcat');
+  const isOtter = lowerPrompt.includes('otter') || lowerPrompt.includes('capy') || lowerPrompt.includes('capybara') || lowerPrompt.includes('sloth') || lowerPrompt.includes('badger') || lowerPrompt.includes('beaver');
+  const isDuck = lowerPrompt.includes('duck') || lowerPrompt.includes('goose') || lowerPrompt.includes('quack') || lowerPrompt.includes('mallard') || lowerPrompt.includes('bird');
   const isFrog = lowerPrompt.includes('frog') || lowerPrompt.includes('pepe') || lowerPrompt.includes('toad');
   const isBull = lowerPrompt.includes('bull') || lowerPrompt.includes('horn') || lowerPrompt.includes('ox');
   const isBanana = lowerPrompt.includes('banana') || lowerPrompt.includes('chair') || lowerPrompt.includes('lawn') || lowerPrompt.includes('fruit');
@@ -126,7 +128,7 @@ export function generateVectorMascotSvg(
       <line x1="382" y1="112" x2="442" y2="112" stroke="#a855f7" stroke-width="2" />
       <line x1="382" y1="122" x2="420" y2="122" stroke="#39ff14" stroke-width="2" />
       <line x1="382" y1="132" x2="445" y2="132" stroke="#a855f7" stroke-width="2" stroke-dasharray="3 2" />
-      <text x="414" y="148" font-family="monospace" font-size="9" fill="#a855f7" text-anchor="middle">PYTH: NVDA</text>
+      <text x="414" y="148" font-family="monospace" font-size="9" fill="#a855f7" text-anchor="middle">RPC: SOLANA</text>
 
       <!-- Hoodie Body -->
       <path d="M 160 360 C 160 280, 205 255, 256 255 C 307 255, 352 280, 352 360 Z" fill="#1e2433" stroke="#334155" stroke-width="6" />
@@ -190,6 +192,22 @@ export function generateVectorMascotSvg(
       <line x1="140" y1="240" x2="200" y2="235" stroke="#ffffff" stroke-width="3" />
       <line x1="372" y1="220" x2="312" y2="225" stroke="#ffffff" stroke-width="3" />
       <line x1="372" y1="240" x2="312" y2="235" stroke="#ffffff" stroke-width="3" />
+    ` : isOtter ? `
+      <!-- Otter / Capybara Chubby Silhouette -->
+      <circle cx="160" cy="155" r="28" fill="#78350f" stroke="#451a03" stroke-width="5" />
+      <circle cx="352" cy="155" r="28" fill="#78350f" stroke="#451a03" stroke-width="5" />
+      <circle cx="160" cy="155" r="14" fill="#fed7aa" />
+      <circle cx="352" cy="155" r="14" fill="#fed7aa" />
+      <ellipse cx="256" cy="225" rx="105" ry="95" fill="#92400e" stroke="#451a03" stroke-width="6" />
+      <ellipse cx="256" cy="245" rx="55" ry="40" fill="#fef3c7" stroke="#b45309" stroke-width="4" />
+      <ellipse cx="256" cy="230" rx="16" ry="12" fill="#1c1917" />
+      <path d="M 256 242 V 256 Q 256 268 240 262 M 256 256 Q 256 268 272 262" fill="none" stroke="#1c1917" stroke-width="4" stroke-linecap="round" />
+    ` : isDuck ? `
+      <!-- Duck Silhouette -->
+      <ellipse cx="256" cy="225" rx="95" ry="90" fill="#facc15" stroke="#ca8a04" stroke-width="6" />
+      <path d="M 235 138 C 245 105, 275 110, 270 138" fill="#facc15" stroke="#ca8a04" stroke-width="5" />
+      <path d="M 185 240 Q 256 270 327 240 Q 256 295 185 240 Z" fill="#ea580c" stroke="#9a3412" stroke-width="6" />
+      <ellipse cx="256" cy="248" rx="8" ry="4" fill="#9a3412" />
     ` : isAlien ? `
       <ellipse cx="256" cy="210" rx="90" ry="110" fill="${headColor}" stroke="#0e7490" stroke-width="6" />
       <ellipse cx="215" cy="200" rx="30" ry="40" fill="#000000" transform="rotate(-15 215 200)" filter="url(#glow_${absSeed})" />

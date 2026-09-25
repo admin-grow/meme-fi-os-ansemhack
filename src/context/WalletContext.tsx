@@ -101,12 +101,11 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }
 
       if (type === 'phantom') {
-        const anyWindow = window as any;
+        const anyWindow = typeof window !== 'undefined' ? (window as any) : null;
         const provider = anyWindow?.phantom?.solana || anyWindow?.solana;
 
         if (!provider || !provider.isPhantom) {
-          window.open('https://phantom.app/', '_blank');
-          throw new Error('Phantom extension not detected. Opening download page...');
+          throw new Error('Phantom extension not detected in browser. Please install Phantom or use the Burner Sandbox Keypair for instant testing.');
         }
 
         const resp = await provider.connect();
@@ -128,12 +127,11 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }
 
       if (type === 'solflare') {
-        const anyWindow = window as any;
+        const anyWindow = typeof window !== 'undefined' ? (window as any) : null;
         const provider = anyWindow?.solflare;
 
         if (!provider || !provider.isSolflare) {
-          window.open('https://solflare.com/', '_blank');
-          throw new Error('Solflare extension not detected. Opening download page...');
+          throw new Error('Solflare extension not detected in browser. Please install Solflare or use the Burner Sandbox Keypair for instant testing.');
         }
 
         await provider.connect();

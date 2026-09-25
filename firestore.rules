@@ -1,0 +1,53 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions
+    function isValidId(id) { 
+      return id is string && id.size() <= 128; 
+    }
+    
+    function incoming() { 
+      return request.resource.data; 
+    }
+
+    // Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Recent Generations / Campaigns
+    match /recent_generations/{genId} {
+      allow read: if true;
+      allow create: if isValidId(genId) && 
+        incoming().token_name is string && incoming().token_name.size() <= 100 &&
+        incoming().ticker is string && incoming().ticker.size() <= 30;
+      allow update, delete: if false;
+    }
+
+    // Narrative History - Past narrative strategies
+    match /narrative_history/{historyId} {
+      allow read: if true;
+      allow create: if isValidId(historyId);
+      allow update, delete: if false;
+    }
+
+    // Campaign Cache
+    match /campaign_cache/{cacheId} {
+      allow read: if true;
+      allow write: if isValidId(cacheId);
+    }
+
+    // Branding Signatures
+    match /branding_signatures/{signatureId} {
+      allow read: if true;
+      allow create: if isValidId(signatureId);
+      allow update, delete: if false;
+    }
+
+    // User Assets
+    match /users/{walletAddress}/assets/{assetId} {
+      allow read: if true;
+      allow write: if isValidId(assetId) && isValidId(walletAddress);
+    }
+  }
+}

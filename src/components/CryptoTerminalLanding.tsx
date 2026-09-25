@@ -27,6 +27,7 @@ import {
 import { useTokenContext, LaunchedTokenRecord } from '../context/TokenContext';
 import { generateVectorMascotSvg } from '../utils/mascotSvgGenerator';
 import { Agent1NarrativeResult, Agent2VisualResult, TokenDeploymentData } from '../types';
+import { Trash2 } from 'lucide-react';
 
 interface CryptoTerminalLandingProps {
   onLaunchStudio: () => void;
@@ -42,12 +43,17 @@ export const CryptoTerminalLanding: React.FC<CryptoTerminalLandingProps> = ({
   onOpenWhitepaper,
   onSelectTokenForMicroSite,
 }) => {
-  const { userTokens } = useTokenContext();
+  const { userTokens, allTokens, networkFilter, setNetworkFilter, clearDevnetTokens } = useTokenContext();
   const [filterMode, setFilterMode] = useState<'all' | 'rewards' | 'mine'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [copiedCA, setCopiedCA] = useState<string | null>(null);
   const [selectedTokenForManifesto, setSelectedTokenForManifesto] = useState<LaunchedTokenRecord | null>(null);
   const [copiedManifesto, setCopiedManifesto] = useState<boolean>(false);
+  const [showClearConfirm, setShowClearConfirm] = useState<boolean>(false);
+
+  const devnetCount = useMemo(() => {
+    return allTokens.filter((t) => t.network === 'devnet').length;
+  }, [allTokens]);
 
   // Dynamic Sustainability Telemetry Calculations
   const holderRewardsTokens = useMemo(() => {
@@ -71,7 +77,7 @@ export const CryptoTerminalLanding: React.FC<CryptoTerminalLandingProps> = ({
   }, [userTokens]);
 
   // Combine user deployed tokens (first priority) + curated demo tokens
-  const allTokens = useMemo(() => {
+  const displayTokens = useMemo(() => {
     const userMints = new Set(userTokens.map((t) => t.mintAddress));
     const nonDuplicatedCurated = CURATED_SHOWCASE_TOKENS.filter((t) => !userMints.has(t.mintAddress));
     return [...userTokens, ...nonDuplicatedCurated];
@@ -79,7 +85,7 @@ export const CryptoTerminalLanding: React.FC<CryptoTerminalLandingProps> = ({
 
   // Filtered tokens
   const filteredTokens = useMemo(() => {
-    return allTokens.filter((token) => {
+    return displayTokens.filter((token) => {
       const matchesSearch = 
         token.tokenName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         token.ticker.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -95,7 +101,7 @@ export const CryptoTerminalLanding: React.FC<CryptoTerminalLandingProps> = ({
       }
       return true;
     });
-  }, [allTokens, searchQuery, filterMode, userTokens]);
+  }, [displayTokens, searchQuery, filterMode, userTokens]);
 
   const copyAddress = (address: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -309,45 +315,82 @@ export const CryptoTerminalLanding: React.FC<CryptoTerminalLandingProps> = ({
               />
             </div>
 
-            <div className="flex items-center gap-1 bg-[#0e121a] p-1 rounded-xl border border-[#242b3b] text-xs font-mono overflow-x-auto no-scrollbar w-full sm:w-auto">
+            {/* Network Isolation Filter */}
+            <div className="flex items-center gap-1 bg-[#0e121a] p-1 rounded-xl border border-[#242b3b] text-xs font-mono overflow-x-auto no-scrollbar">
               <button
                 type="button"
-                onClick={() => setFilterMode('all')}
-                className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-all cursor-pointer text-xs ${
-                  filterMode === 'all'
+                onClick={() => setNetworkFilter('all')}
+                className={`px-2.5 py-1.5 rounded-lg whitespace-nowrap transition-all cursor-pointer text-xs ${
+                  networkFilter === 'all'
                     ? 'bg-[#1e2536] text-white font-bold shadow'
                     : 'text-[#8e99ac] hover:text-white'
                 }`}
               >
-                All ({allTokens.length})
+                All Nets
               </button>
-
               <button
                 type="button"
-                onClick={() => setFilterMode('rewards')}
-                className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-all cursor-pointer text-xs ${
-                  filterMode === 'rewards'
-                    ? 'bg-[#1e2536] text-[#39ff14] font-bold shadow'
+                onClick={() => setNetworkFilter('mainnet')}
+                className={`px-2.5 py-1.5 rounded-lg whitespace-nowrap transition-all cursor-pointer text-xs flex items-center gap-1.5 ${
+                  networkFilter === 'mainnet'
+                    ? 'bg-emerald-500/20 text-emerald-400 font-bold border border-emerald-500/40 shadow'
                     : 'text-[#8e99ac] hover:text-white'
                 }`}
               >
-                Holder Stream
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span>Mainnet</span>
               </button>
-
-              {userTokens.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setFilterMode('mine')}
-                  className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-all cursor-pointer text-xs ${
-                    filterMode === 'mine'
-                      ? 'bg-[#00f5ff]/20 text-[#00f5ff] font-bold border border-[#00f5ff]/40'
-                      : 'text-[#8e99ac] hover:text-white'
-                  }`}
-                >
-                  My Tokens ({userTokens.length})
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={() => setNetworkFilter('devnet')}
+                className={`px-2.5 py-1.5 rounded-lg whitespace-nowrap transition-all cursor-pointer text-xs flex items-center gap-1.5 ${
+                  networkFilter === 'devnet'
+                    ? 'bg-amber-500/20 text-amber-400 font-bold border border-amber-500/40 shadow'
+                    : 'text-[#8e99ac] hover:text-white'
+                }`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                <span>Devnet ({devnetCount})</span>
+              </button>
             </div>
+
+            {/* Clear Devnet Sandbox Action */}
+            {devnetCount > 0 && (
+              <div>
+                {!showClearConfirm ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowClearConfirm(true)}
+                    className="px-2.5 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 font-mono text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap"
+                    title="Remove all Devnet simulation tokens from workspace"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 text-amber-400" />
+                    <span className="hidden sm:inline">Purge Devnet</span>
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-1 bg-[#161c28] p-1 rounded-xl border border-amber-500/40 animate-fadeIn text-xs font-mono">
+                    <span className="text-amber-300 text-[10px] px-1.5">Purge simulations?</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        clearDevnetTokens();
+                        setShowClearConfirm(false);
+                      }}
+                      className="px-2 py-1 bg-amber-500 text-black font-bold rounded hover:bg-amber-400 text-[10px] cursor-pointer"
+                    >
+                      Yes, Clear
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowClearConfirm(false)}
+                      className="px-2 py-1 text-slate-400 hover:text-white rounded text-[10px] cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -475,6 +518,18 @@ export const CryptoTerminalLanding: React.FC<CryptoTerminalLandingProps> = ({
 
                   {/* Badges Strip */}
                   <div className="flex flex-wrap items-center gap-1 sm:gap-1.5 text-[9px] sm:text-[10px] font-mono">
+                    {token.network === 'devnet' ? (
+                      <span className="px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 border border-amber-500/30 font-bold truncate flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                        DEVNET SIM
+                      </span>
+                    ) : (
+                      <span className="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-bold truncate flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                        MAINNET BETA
+                      </span>
+                    )}
+
                     {token.rewardModel === 'HOLDER_REWARDS' ? (
                       <span className="px-1.5 py-0.5 rounded bg-[#39ff14]/15 text-[#39ff14] border border-[#39ff14]/30 font-bold truncate">
                         HOLDER STREAM
@@ -587,9 +642,9 @@ export const CryptoTerminalLanding: React.FC<CryptoTerminalLandingProps> = ({
               <div className="w-8 h-8 rounded-lg bg-[#00f5ff]/15 border border-[#00f5ff]/30 flex items-center justify-center text-[#00f5ff]">
                 <BarChart3 className="w-4 h-4" />
               </div>
-              <div className="text-xs font-bold text-white">Live Pyth Oracle Pricing</div>
+              <div className="text-xs font-bold text-white">DexScreener Telemetry</div>
               <p className="text-[11px] text-[#8e99ac] leading-relaxed font-sans">
-                Real-time candlestick charts and live correlation calculations against traditional US stock market assets.
+                Real-time candlestick charts, bonding curve gauges, and decentralized liquidity depth monitoring.
               </p>
             </div>
 
@@ -681,7 +736,7 @@ export const CryptoTerminalLanding: React.FC<CryptoTerminalLandingProps> = ({
             </div>
             <h4 className="text-sm font-bold text-white font-mono">Web3 Ops Host</h4>
             <p className="text-xs text-[#8e99ac] leading-relaxed">
-              Instantly deploys full-screen branded micro-sites with live Pyth oracle charts, swap widgets, and community burn pits.
+              Instantly deploys full-screen branded micro-sites with real-time DexScreener charts, verified contract references, and community hubs.
             </p>
           </div>
         </div>

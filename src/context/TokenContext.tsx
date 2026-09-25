@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useMemo } from '
 import { generateVectorMascotSvg } from '../utils/mascotSvgGenerator';
 import { TokenSocialLinks } from '../types';
 import memeFiCatImage from '../assets/images/memefi_cat_mascot_1790023358949.jpg';
+import { useSolanaWallet } from './WalletContext';
 
 export interface LaunchedTokenRecord {
   mintAddress: string;
@@ -26,50 +27,25 @@ export interface LaunchedTokenRecord {
   volume24hUsd?: number;
   holdersCount?: number;
   bondingProgress?: number;
+  network?: 'devnet' | 'mainnet';
+  txHash?: string;
 }
 
-export const DEFAULT_GENESIS_MFCAT_TOKEN: LaunchedTokenRecord = {
-  mintAddress: 'MFCAT88x7vK6wQ5nP4mB3xC2yR9tU1eW7sD5fG3pump',
-  tokenName: 'MemeFiCat',
-  ticker: 'MFCAT',
-  tagline: 'The official cybernetic feline orchestrating multi-agent AI meme deployments on Solana.',
-  lore: 'Born inside the Solana SVM runtime, $MFCAT is the official genesis utility mascot of MemeFi OS. Armed with glowing cyber-goggles and multi-terminal command interfaces, MemeFiCat coordinates the 4 sequential AI agents, automates viral meme canvas synthesis, and purrs at 400 TPS with permanent 100% genesis LP token burn.',
-  imageUrl: memeFiCatImage,
-  mascotSvg: generateVectorMascotSvg('MFCAT', 'MemeFiCat', 'Cybernetic neon cat with glowing holographic sunglasses sitting on a supercomputer cluster terminal', 'Tech/AI Absurdism', 'Cyberpunk Pixel Art'),
-  ipfsMetadataUri: 'https://clawpump.tech/token/MFCAT88x7vK6wQ5nP4mB3xC2yR9tU1eW7sD5fG3pump',
-  launchedAt: 1726200000000,
-  creatorWallet: '9yQP8a3N1vF7kxM2bL8uR4eW5dC6zVb1a0',
-  initialBuySol: 0.05,
-  marketCap: 98400,
-  solRaised: 68.4,
-  rewardModel: 'HOLDER_REWARDS',
-};
-
-export const DEFAULT_GENESIS_HITL_TOKEN: LaunchedTokenRecord = {
-  mintAddress: 'HITL99zX4kL9wV8nB7mC5xP2qR1tY6uJ3aE7sD4fG2pump',
-  tokenName: 'Human in the Loop',
-  ticker: 'HITL',
-  tagline: 'AI writes the lore. AI paints the chart. A human must press the button.',
-  lore: 'In an era of runaway autonomous AI agent swarms, $HITL is the ultimate cultural counter-balance. Four sovereign neural networks proposed the contract, generated the memes, and monitored the bonding curve — but an exhausted human with an iced oat latte had to manually click the big red APPROVE button before Block 0.',
-  imageUrl: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=500&auto=format&fit=crop&q=80',
-  mascotSvg: generateVectorMascotSvg('HITL', 'Human in the Loop', 'Human in the loop developer in hoodie holding red approved stamp with iced coffee', 'Tech/AI Absurdism', 'Vector Sticker'),
-  ipfsMetadataUri: 'https://clawpump.tech/token/HITL99zX4kL9wV8nB7mC5xP2qR1tY6uJ3aE7sD4fG2pump',
-  launchedAt: 1726200000000,
-  creatorWallet: '9yQP8a3N1vF7kxM2bL8uR4eW5dC6zVb1a0',
-  initialBuySol: 0.05,
-  marketCap: 64200,
-  solRaised: 48.6,
-  rewardModel: 'CREATOR_FEE',
-};
+export const DEFAULT_GENESIS_MFCAT_TOKEN: LaunchedTokenRecord | null = null;
+export const DEFAULT_GENESIS_HITL_TOKEN: LaunchedTokenRecord | null = null;
 
 interface TokenContextType {
   // All tokens deployed by currently active wallet / sandbox
   userTokens: LaunchedTokenRecord[];
+  allTokens: LaunchedTokenRecord[];
   // Currently focused token (Coin A vs Coin B)
   activeToken: LaunchedTokenRecord | null;
+  networkFilter: 'all' | 'mainnet' | 'devnet';
+  setNetworkFilter: (filter: 'all' | 'mainnet' | 'devnet') => void;
   setActiveTokenByMint: (mintAddress: string) => void;
   saveLaunchedToken: (token: Omit<LaunchedTokenRecord, 'launchedAt'>) => void;
   removeTokenRecord: (mintAddress: string) => void;
+  clearDevnetTokens: () => void;
   // Dynamic community broadcast generation helpers
   getTwitterBroadcastUrl: (token: LaunchedTokenRecord, customMessage?: string) => string;
   getTwitterRaidUrl: (token: LaunchedTokenRecord, customMessage?: string) => string;
@@ -152,72 +128,98 @@ function safePersistTokens(storageKey: string, tokens: LaunchedTokenRecord[]): v
 export const TokenProvider: React.FC<{
   children: React.ReactNode;
   activeWalletAddress?: string | null;
-}> = ({ children, activeWalletAddress }) => {
-  const [userTokens, setUserTokens] = useState<LaunchedTokenRecord[]>([]);
-  const [activeMint, setActiveMint] = useState<string | null>(null);
+}> = ({ children, activeWalletAddress: propWalletAddress }) => {
+  const { wallet } = useSolanaWallet();
+  const activeWalletAddress = propWalletAddress !== undefined ? propWalletAddress : wallet?.address;
+  const currentNetwork = wallet?.network || 'devnet';
 
-  // Storage key is strictly isolated per connected wallet address
+  const [rawTokens, setRawTokens] = useState<LaunchedTokenRecord[]>([]);
+  const [activeMint, setActiveMint] = useState<string | null>(null);
+  const [networkFilter, setNetworkFilter] = useState<'all' | 'mainnet' | 'devnet'>('all');
+
+  // Storage key is strictly isolated per connected wallet address and network
   const storageKey = useMemo(() => {
     return activeWalletAddress
       ? `${STORAGE_PREFIX}${activeWalletAddress}`
       : `${STORAGE_PREFIX}sandbox_default`;
   }, [activeWalletAddress]);
 
-  // Load tokens from localStorage upon wallet change
+  // Load tokens from localStorage upon wallet change and migrate/tag existing tokens
   useEffect(() => {
     try {
       const raw = localStorage.getItem(storageKey);
       if (raw) {
         const parsed: LaunchedTokenRecord[] = JSON.parse(raw);
         if (parsed.length > 0) {
-          // Rehydrate mascot SVG if omitted during quota-safe storage
-          const hydrated = parsed.map((t) => {
-            if (!t.mascotSvg) {
-              return {
-                ...t,
-                mascotSvg: generateVectorMascotSvg(t.ticker, t.tokenName, t.lore || t.tagline, 'Tech/AI Absurdism', 'Cyberpunk Pixel Art'),
-              };
-            }
-            return t;
-          });
-          // Ensure default showcase tokens exist if not deleted
-          const hasMFCAT = hydrated.some((t) => t.ticker === 'MFCAT' || t.tokenName === 'MemeFiCat');
-          const hasHITL = hydrated.some((t) => t.ticker === 'HITL' || t.tokenName === 'Human in the Loop');
-          const fullList = [...hydrated];
-          if (!hasMFCAT) fullList.unshift(DEFAULT_GENESIS_MFCAT_TOKEN);
-          if (!hasHITL) fullList.push(DEFAULT_GENESIS_HITL_TOKEN);
+          // Filter out legacy sample demo tokens
+          const genuineTokens = parsed.filter(
+            (t) =>
+              t.mintAddress !== 'MFCAT88x7vK6wQ5nP4mB3xC2yR9tU1eW7sD5fG3pump' &&
+              t.mintAddress !== 'HITL99zX4kL9wV8nB7mC5xP2qR1tY6uJ3aE7sD4fG2pump' &&
+              t.tokenName !== 'MemeFiCat' &&
+              t.tokenName !== 'Human in the Loop'
+          );
 
-          setUserTokens(fullList);
-          setActiveMint((prev) => (prev && fullList.some((t) => t.mintAddress === prev) ? prev : fullList[0].mintAddress));
+          // Rehydrate mascot SVG and ensure network tag is present
+          const hydrated = genuineTokens.map((t) => {
+            const hasNetwork = t.network === 'devnet' || t.network === 'mainnet';
+            const network = hasNetwork 
+              ? t.network 
+              : 'mainnet';
+            
+            return {
+              ...t,
+              network,
+              mascotSvg: t.mascotSvg || generateVectorMascotSvg(t.ticker, t.tokenName, t.lore || t.tagline, 'Tech/AI Absurdism', 'Cyberpunk Pixel Art'),
+            };
+          });
+
+          setRawTokens(hydrated);
+          setActiveMint(hydrated.length > 0 ? hydrated[0].mintAddress : null);
         } else {
-          // Pre-load default official showcase tokens
-          const initialShowcase = [DEFAULT_GENESIS_MFCAT_TOKEN, DEFAULT_GENESIS_HITL_TOKEN];
-          setUserTokens(initialShowcase);
-          setActiveMint(DEFAULT_GENESIS_MFCAT_TOKEN.mintAddress);
+          setRawTokens([]);
+          setActiveMint(null);
         }
       } else {
-        // Initial state with official MemeFiCat & HITL showcase tokens
-        const initialShowcase = [DEFAULT_GENESIS_MFCAT_TOKEN, DEFAULT_GENESIS_HITL_TOKEN];
-        setUserTokens(initialShowcase);
-        setActiveMint(DEFAULT_GENESIS_MFCAT_TOKEN.mintAddress);
+        setRawTokens([]);
+        setActiveMint(null);
       }
     } catch (e) {
       console.error('Failed to load wallet tokens from localStorage:', e);
-      const fallbackShowcase = [DEFAULT_GENESIS_MFCAT_TOKEN, DEFAULT_GENESIS_HITL_TOKEN];
-      setUserTokens(fallbackShowcase);
-      setActiveMint(DEFAULT_GENESIS_MFCAT_TOKEN.mintAddress);
+      setRawTokens([]);
+      setActiveMint(null);
     }
   }, [storageKey]);
 
-  // Save new deployed token into isolated storage
-  const saveLaunchedToken = (tokenData: Omit<LaunchedTokenRecord, 'launchedAt'>) => {
+  // Save new deployed token into isolated storage with explicit network tag and cloud persistence
+  const saveLaunchedToken = async (tokenData: Omit<LaunchedTokenRecord, 'launchedAt'>) => {
     const newRecord: LaunchedTokenRecord = {
       ...tokenData,
+      network: tokenData.network || currentNetwork,
       launchedAt: Date.now(),
     };
 
-    setUserTokens((prev) => {
-      // Prevent duplicates
+    // Attempt Cloud Persistence (Non-custodial, wallet-signed)
+    if (activeWalletAddress && newRecord.mascotSvg) {
+        try {
+            // Note: In a full production implementation, we would prompt 
+            // for a signature here. For now, we simulate the structure.
+            await fetch('/api/save-asset', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    walletAddress: activeWalletAddress,
+                    assetData: newRecord.mascotSvg,
+                    signature: "SIMULATED_SIGNATURE_PLACEHOLDER",
+                    message: "Authorize asset storage to cloud"
+                })
+            });
+        } catch (e) {
+            console.error("Cloud persistence failed:", e);
+        }
+    }
+
+    setRawTokens((prev) => {
       const filtered = prev.filter((t) => t.mintAddress !== newRecord.mintAddress);
       const updated = [newRecord, ...filtered];
       safePersistTokens(storageKey, updated);
@@ -228,7 +230,7 @@ export const TokenProvider: React.FC<{
   };
 
   const removeTokenRecord = (mintAddress: string) => {
-    setUserTokens((prev) => {
+    setRawTokens((prev) => {
       const updated = prev.filter((t) => t.mintAddress !== mintAddress);
       safePersistTokens(storageKey, updated);
       return updated;
@@ -238,13 +240,33 @@ export const TokenProvider: React.FC<{
     }
   };
 
+  // Clear all Devnet simulation tokens from workspace
+  const clearDevnetTokens = () => {
+    setRawTokens((prev) => {
+      // Keep only mainnet tokens and official showcase tokens
+      const retained = prev.filter((t) => t.network === 'mainnet' || t.mintAddress === DEFAULT_GENESIS_MFCAT_TOKEN.mintAddress || t.mintAddress === DEFAULT_GENESIS_HITL_TOKEN.mintAddress);
+      safePersistTokens(storageKey, retained);
+      return retained;
+    });
+    setActiveMint(DEFAULT_GENESIS_MFCAT_TOKEN.mintAddress);
+  };
+
   const setActiveTokenByMint = (mintAddress: string) => {
     setActiveMint(mintAddress);
   };
 
+  // Filtered tokens based on selected networkFilter
+  const userTokens = useMemo(() => {
+    if (networkFilter === 'all') return rawTokens;
+    return rawTokens.filter((t) => {
+      const tokenNet = t.network || 'mainnet';
+      return tokenNet === networkFilter;
+    });
+  }, [rawTokens, networkFilter]);
+
   const activeToken = useMemo(() => {
-    return userTokens.find((t) => t.mintAddress === activeMint) || userTokens[0] || null;
-  }, [userTokens, activeMint]);
+    return rawTokens.find((t) => t.mintAddress === activeMint) || rawTokens[0] || null;
+  }, [rawTokens, activeMint]);
 
   // Agent 03: Click-to-Tweet dynamic community broadcast link generator
   const getTwitterBroadcastUrl = (token: LaunchedTokenRecord, customMessage?: string) => {
@@ -273,10 +295,14 @@ export const TokenProvider: React.FC<{
     <TokenContext.Provider
       value={{
         userTokens,
+        allTokens: rawTokens,
         activeToken,
+        networkFilter,
+        setNetworkFilter,
         setActiveTokenByMint,
         saveLaunchedToken,
         removeTokenRecord,
+        clearDevnetTokens,
         getTwitterBroadcastUrl,
         getTwitterRaidUrl,
         getTelegramAlertPayload,

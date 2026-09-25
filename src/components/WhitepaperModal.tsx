@@ -75,7 +75,7 @@ The protocol organizes four autonomous agent modules that operate sequentially w
 
 4. **Agent 4 (Dynamic Token Micro-Site Generator)**:
    - Autonomously builds and compiles a dedicated, full-screen branded micro-site for every token.
-   - Includes real-time Pyth Network price feeds, bonding curve progress meters, community broadcast hubs, and shareable manifestos.
+   - Includes real-time DexScreener candlestick charts, bonding curve progress meters, community broadcast hubs, and shareable manifestos.
 
 ---
 
@@ -409,7 +409,7 @@ MemeFi OS is an autonomous software interface and client-side developer tooling 
                     <span className="text-[10px] font-mono text-slate-400">Branded Experience</span>
                   </div>
                   <p className="text-xs text-[#8e99ac]">
-                    Generates a standalone, dedicated branded web portal for the coin, complete with live Pyth oracle price trackers, bonding curve gauges, and 1-click buy integration.
+                    Generates a standalone, dedicated branded web portal for the coin, complete with real-time DexScreener charts, bonding curve gauges, and verified on-chain contract references.
                   </p>
                 </div>
               </div>

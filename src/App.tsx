@@ -27,12 +27,15 @@ import { generateClientFallbackCampaign } from './utils/fallbackCampaign';
 import { AppSidebar } from './components/AppSidebar';
 import { CryptoTerminalLanding } from './components/CryptoTerminalLanding';
 import { WhitepaperModal } from './components/WhitepaperModal';
+import { DatabaseGenerationsModal } from './components/DatabaseGenerationsModal';
+import { persistRecentGenerationToDb } from './lib/firebase';
 import { ImportTokenModal } from './components/ImportTokenModal';
 import { NarrativeLifecycleModal } from './components/NarrativeLifecycleModal';
 import { AssetFinderModal } from './components/AssetFinderModal';
 import { CommunityEngagementModal } from './components/CommunityEngagementModal';
 import { DevPortfolioModal } from './components/DevPortfolioModal';
 import { SuperAdminDashboardModal } from './components/SuperAdminDashboardModal';
+import { WalletModal } from './components/WalletModal';
 import { Zap, Sparkles, ShieldCheck, Globe, ArrowLeft, ExternalLink, Laptop, BookOpen, ArrowRight, FolderOpen, Radio, TrendingUp, Coins, Menu } from 'lucide-react';
 
 function AppContent() {
@@ -59,6 +62,7 @@ function AppContent() {
   const [isDevPortfolioOpen, setIsDevPortfolioOpen] = useState<boolean>(false);
   const [isSuperAdminOpen, setIsSuperAdminOpen] = useState<boolean>(false);
   const [isWhitepaperOpen, setIsWhitepaperOpen] = useState<boolean>(false);
+  const [isDatabaseModalOpen, setIsDatabaseModalOpen] = useState<boolean>(false);
 
   // Check URL query parameters for direct route to studio or specific view
   useEffect(() => {
@@ -149,73 +153,85 @@ function AppContent() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Generate full campaign invoking Agent 1, Agent 2, Agent 3
-  const handleGenerateCampaign = async (autoAdvance: boolean = true) => {
+  // Generate full campaign invoking Agent 1, Agent 2, Agent 3 asynchronously
+  const handleGenerateCampaign = async (autoAdvance: boolean = true, config?: any) => {
     setIsGenerating(true);
     setErrorMessage(null);
-    setActiveAgentLog('Agent 1 (Trend Strategist): Mining Crypto Twitter tropes & crafting $TICKER lore...');
+    setActiveAgentLog('Agent 0: Running Pre-Flight Architectural Integrity Check (5 Components)...');
 
-    const timer1 = setTimeout(() => {
-      setActiveAgentLog('Agent 2 (Visual Designer): Rendering 512x512 vector mascot & Breaking News overlays...');
-    }, 1000);
-
-    const timer2 = setTimeout(() => {
-      setActiveAgentLog('Agent 3 (Community Mobilizer): Generating Telegram buy alerts & Twitter broadcast actions...');
-    }, 2000);
+    // Distinguish between structured config and raw prompt
+    const isStructured = Boolean(config && config.subject);
+    const activePrompt = config?.prompt || prompt;
+    const activeCategory = config?.category || category;
 
     try {
+      // 1. Start generation
       const response = await fetch('/api/generate-full-campaign', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-        body: JSON.stringify({
-          category,
-          prompt,
-          template_type: 'Breaking News',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          category: activeCategory, 
+          prompt: activePrompt,
+          bespokeConfig: isStructured ? config : null,
+          template_type: 'Breaking News' 
         }),
       });
 
-      clearTimeout(timer1);
-      clearTimeout(timer2);
 
-      const contentType = response.headers.get('content-type') || '';
-      let data: FullCampaignData | null = null;
+      if (!response.ok) throw new Error('Failed to start campaign generation');
 
-      if (response.ok && contentType.includes('application/json')) {
-        try {
-          data = await response.json();
-        } catch {
-          data = null;
+      const { jobId } = await response.json();
+
+      // 2. Poll for status
+      const poll = async (): Promise<FullCampaignData> => {
+        const statusResponse = await fetch(`/api/campaign-status/${jobId}`);
+        if (!statusResponse.ok) throw new Error('Failed to check job status');
+        
+        const job = await statusResponse.json();
+        
+        if (job.status === 'completed') {
+          // Robust validation for completed data
+          if (job.data && typeof job.data === 'object') {
+            return job.data;
+          } else {
+            console.error('Job completed but data is malformed:', job.data);
+            throw new Error('Received malformed campaign data from server');
+          }
         }
+        if (job.status === 'failed') throw new Error(job.error || 'Generation failed');
+        
+        setActiveAgentLog('AI Agents crunching data...');
+        await new Promise((resolve) => setTimeout(resolve, 2000)); // Poll every 2s
+        return poll();
+      };
+
+      const campaignData = await poll();
+      setCampaign(campaignData);
+
+      // Client-side Firestore sync for guaranteed persistence
+      if (campaignData && campaignData.agent1) {
+        persistRecentGenerationToDb({
+          token_name: campaignData.agent1.token_name || 'UNKNOWN',
+          ticker: campaignData.agent1.ticker || 'MEME',
+          tagline: campaignData.agent1.tagline || '',
+          rallying_phrase: campaignData.agent1.rallying_phrase || '',
+          viral_score: campaignData.agent1.viral_score || 85,
+          category: activeCategory,
+          prompt: activePrompt,
+          mascot_prompt: campaignData.agent1.mascot_prompt || '',
+          mascot_svg: campaignData.agent2?.mascot_svg || '',
+          agent1: campaignData.agent1,
+          agent2: campaignData.agent2,
+          agent3: campaignData.agent3,
+        }).catch((e) => console.warn('[Firestore] Client sync note:', e));
       }
 
-      // If backend returned valid campaign data, use it
-      if (data && data.agent1 && data.agent2 && data.agent3) {
-        setCampaign(data);
-      } else {
-        // Resilient deterministic client-side synthesis ensures the user flow is NEVER blocked
-        const fallbackData = generateClientFallbackCampaign({
-          category,
-          prompt,
-          template_type: 'Breaking News',
-        });
-        setCampaign(fallbackData);
-      }
-
-      // Keep user on Step 1 to review and understand the narrative in the right pane before proceeding
       window.scrollTo({ top: 0, behavior: 'smooth' });
+
     } catch (err: any) {
-      console.warn('Network campaign generation fallback triggered:', err);
-      // Seamlessly fall back to client-side generated suite
-      const fallbackData = generateClientFallbackCampaign({
-        category,
-        prompt,
-        template_type: 'Breaking News',
-      });
-      setCampaign(fallbackData);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      console.error('Campaign generation error:', err);
+      setErrorMessage(err.message || 'An unexpected error occurred during generation.');
     } finally {
-      clearTimeout(timer1);
-      clearTimeout(timer2);
       setIsGenerating(false);
       setActiveAgentLog('');
     }
@@ -268,6 +284,8 @@ function AppContent() {
         ipfsMetadataUri: deploymentData.clawPumpUrl || '',
         creatorWallet: wallet?.address || 'Self-Custody Connected',
         socialLinks: deploymentData.socialLinks,
+        network: deploymentData.solanaNetwork === 'mainnet' || wallet.network === 'mainnet' ? 'mainnet' : 'devnet',
+        txHash: deploymentData.txHash,
       });
     }
   };
@@ -530,6 +548,7 @@ function AppContent() {
           hasData={Boolean(campaign)} 
           onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
           onOpenWhitepaper={() => setIsWhitepaperOpen(true)}
+          onOpenDatabaseModal={() => setIsDatabaseModalOpen(true)}
         />
 
         {/* VIEW 1: DEDICATED TOKEN STUDIO WORKSPACE (Default, Clean, Focused) */}
@@ -603,14 +622,43 @@ function AppContent() {
                   setCategory={setCategory}
                   prompt={prompt}
                   setPrompt={setPrompt}
-                  onGenerate={() => handleGenerateCampaign(false)}
+                  onGenerate={(bespokeConfig) => handleGenerateCampaign(false, bespokeConfig)}
                   isGenerating={isGenerating}
                   activeAgentLog={activeAgentLog}
                   narrative={campaign?.agent1 || null}
                   onUpdateNarrative={(updated) => {
                     setCampaign((prev) => prev ? { ...prev, agent1: updated } : null);
                   }}
-                  onApproveAndProceed={() => {
+                  onApproveAndProceed={async () => {
+                    // Trigger rich image generation before advancing to Step 2
+                    if (campaign?.agent2 && !campaign.agent2.mascot_image_url) {
+                      try {
+                        const response = await fetch('/api/generate-image', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            prompt: campaign.agent1.mascot_prompt || `Mascot for ${campaign.agent1.token_name}`,
+                            ticker: campaign.agent1.ticker,
+                            token_name: campaign.agent1.token_name,
+                            category: 'Tech/AI Absurdism',
+                          }),
+                        });
+                        if (response.ok) {
+                          const data = await response.json();
+                          setCampaign((prev) => prev ? {
+                            ...prev,
+                            agent2: {
+                              ...prev.agent2,
+                              mascot_svg: data.mascot_svg || prev.agent2.mascot_svg,
+                              mascot_image_url: data.image_url || prev.agent2.mascot_image_url,
+                            }
+                          } : null);
+                        }
+                      } catch (err) {
+                        console.error('Failed auto-generation:', err);
+                      }
+                    }
+
                     setCurrentStep(2);
                     setMaxReachedStep((prev) => (prev < 2 ? 2 : prev));
                     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -629,6 +677,10 @@ function AppContent() {
                     setCurrentStep(4);
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                   }}
+                  onBack={() => {
+                    setCurrentStep(1);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
                   onNext={() => {
                     setCurrentStep(3);
                     setMaxReachedStep((prev) => (prev < 3 ? 3 : prev));
@@ -642,6 +694,10 @@ function AppContent() {
                   narrative={campaign.agent1}
                   deployment={campaign.deployment || null}
                   onDeploySuccess={handleDeploySuccess}
+                  onBack={() => {
+                    setCurrentStep(2);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
                   onNext={() => {
                     setCurrentStep(4);
                     setMaxReachedStep(4);
@@ -868,12 +924,18 @@ function AppContent() {
         } : null)}
         visual={campaign?.agent2 || null}
         deployment={campaign?.deployment || (activeToken ? {
+          deployed: true,
           mintAddress: activeToken.mintAddress,
           txHash: activeToken.txHash || '',
-          timestamp: activeToken.launchedAt,
-          status: 'DEPLOYED',
-          bondingCurveAddress: '',
-          explorerUrl: `https://solscan.io/token/${activeToken.mintAddress}?cluster=devnet`,
+          timestamp: new Date(activeToken.launchedAt).toISOString(),
+          liquidityPool: '',
+          bondingCurve: '',
+          blockNumber: 0,
+          solanaNetwork: activeToken.network || 'mainnet',
+          deployerWallet: activeToken.creatorWallet,
+          initialSupply: '1,000,000,000',
+          poolShare: '100% Fair Launch',
+          clawPumpUrl: `https://solscan.io/token/${activeToken.mintAddress}`,
         } : null)}
         onGoToMemeStudio={() => {
           setCurrentStep(2);
@@ -896,12 +958,18 @@ function AppContent() {
         } : null)}
         visual={campaign?.agent2 || null}
         deployment={campaign?.deployment || (activeToken ? {
+          deployed: true,
           mintAddress: activeToken.mintAddress,
           txHash: activeToken.txHash || '',
-          timestamp: activeToken.launchedAt,
-          status: 'DEPLOYED',
-          bondingCurveAddress: '',
-          explorerUrl: `https://solscan.io/token/${activeToken.mintAddress}?cluster=devnet`,
+          timestamp: new Date(activeToken.launchedAt).toISOString(),
+          liquidityPool: '',
+          bondingCurve: '',
+          blockNumber: 0,
+          solanaNetwork: activeToken.network || 'mainnet',
+          deployerWallet: activeToken.creatorWallet,
+          initialSupply: '1,000,000,000',
+          poolShare: '100% Fair Launch',
+          clawPumpUrl: `https://solscan.io/token/${activeToken.mintAddress}`,
         } : null)}
         onGoToMemeStudio={() => {
           setCurrentStep(2);
@@ -923,9 +991,23 @@ function AppContent() {
         onClose={() => setIsSuperAdminOpen(false)}
       />
 
+      <WalletModal />
+
       <WhitepaperModal
         isOpen={isWhitepaperOpen}
         onClose={() => setIsWhitepaperOpen(false)}
+      />
+
+      <DatabaseGenerationsModal
+        isOpen={isDatabaseModalOpen}
+        onClose={() => setIsDatabaseModalOpen(false)}
+        onLoadCampaign={(loadedCampaign) => {
+          setCampaign(loadedCampaign);
+          setActiveView('studio');
+          setCurrentStep(2);
+          setMaxReachedStep((prev) => (prev < 2 ? 2 : prev));
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }}
       />
     </div>
   );

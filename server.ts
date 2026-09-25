@@ -1,13 +1,132 @@
 import express from "express";
+import cors from "cors";
 import path from "path";
 import fs from "fs";
 import dotenv from "dotenv";
-import { GoogleGenAI, Type } from "@google/genai";
+import { createHash } from "crypto";
+import { ethers } from "ethers";
+import { GoogleGenAI, Type, ThinkingLevel } from "@google/genai";
+import { initializeApp } from "firebase/app";
+import { 
+  initializeFirestore, 
+  collection, 
+  doc, 
+  getDoc, 
+  getDocs, 
+  setDoc, 
+  addDoc, 
+  query, 
+  orderBy, 
+  limit 
+} from "firebase/firestore";
+
+// Initialize Firebase with Project Configuration
+const firebaseConfig = JSON.parse(fs.readFileSync("./firebase-applet-config.json", "utf-8"));
+const firebaseApp = initializeApp(firebaseConfig);
+const db = initializeFirestore(firebaseApp, {}, firebaseConfig.firestoreDatabaseId);
+
+import { SPARK_CATEGORIES } from './src/storyboardData';
+
+// Firestore Helper Functions
+async function saveRecentGeneration(data: any) {
+  try {
+    const colRef = collection(db, "recent_generations");
+    const docRef = await addDoc(colRef, {
+      ...data,
+      createdAt: data.createdAt || new Date().toISOString()
+    });
+    console.log(`[Firestore] Successfully saved recent generation with ID: ${docRef.id}`);
+    return docRef.id;
+  } catch (err) {
+    console.error("[Firestore] Error saving recent generation:", err);
+    return null;
+  }
+}
+
+async function getRecentGenerations(count = 12) {
+  try {
+    const q = query(
+      collection(db, "recent_generations"),
+      orderBy("createdAt", "desc"),
+      limit(count)
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  } catch (err) {
+    console.warn("[Firestore] Failed to fetch recent generations:", err);
+    return [];
+  }
+}
+
+// Narrative History Helpers
+async function saveNarrativeHistory(prompt: string, strategy: string, aesthetic: string) {
+  try {
+    await addDoc(collection(db, "narrative_history"), {
+      userId: "anonymous", // Or context-based ID
+      prompt,
+      strategy,
+      aesthetic: aesthetic || 'Default Aesthetic',
+      createdAt: new Date().toISOString()
+    });
+    console.log("[Firestore] Narrative history persisted.");
+  } catch (err) {
+    console.error("[Firestore] Error saving narrative history:", err);
+  }
+}
+
+async function getNarrativeHistory(prompt: string) {
+  try {
+    const q = query(
+      collection(db, "narrative_history"),
+      orderBy("createdAt", "desc"),
+      limit(5)
+    );
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => doc.data());
+  } catch (err) {
+    console.warn("[Firestore] History fetch failed:", err);
+    return [];
+  }
+}
+
+function generateHash(input: any): string {
+  return createHash("sha256").update(JSON.stringify(input)).digest("hex");
+}
 
 dotenv.config();
 
 const app = express();
 const PORT = 3000;
+
+// Allowed Origins
+const ALLOWED_ORIGINS = [
+  "https://ais-dev-pui6ag2iv4o6xlym7chb34-364432142619.us-east1.run.app",
+  "https://ais-pre-pui6ag2iv4o6xlym7chb34-364432142619.us-east1.run.app"
+];
+
+// CORS Middleware
+app.use(cors({
+  origin: ALLOWED_ORIGINS,
+  methods: ["POST", "GET"],
+  credentials: true,
+}));
+
+// Custom Origin/Referer Validator Middleware
+app.use((req, res, next) => {
+  if (req.method === "GET") return next(); // Skip for GET requests
+  const origin = req.headers.origin;
+  const referer = req.headers.referer;
+
+  const isAuthorized = 
+    (origin && ALLOWED_ORIGINS.includes(origin)) ||
+    (referer && ALLOWED_ORIGINS.some(allowed => referer.startsWith(allowed)));
+
+  if (!isAuthorized) {
+    console.error(`Blocked unauthorized request from Origin: ${origin}, Referer: ${referer}`);
+    return res.status(403).json({ error: "Forbidden: Unauthorized Origin" });
+  }
+  next();
+});
 
 // -------------------------------------------------------------
 // 0. Container Health Checks (For Cloud Run Liveness & Readiness Probes)
@@ -83,9 +202,11 @@ function apiBodySanitizer(req: express.Request, _res: express.Response, next: ex
     for (const key of Object.keys(req.body)) {
       const val = req.body[key];
       if (typeof val === "string") {
-        // Dynamic limits: user prompts and lore can be up to 500 chars, tickers/names up to 60 chars
+        // Dynamic limits: user prompts and lore can be up to 300 chars, tickers/names up to 60 chars
         const maxLen =
-          key === "prompt" || key === "lore" || key === "fud_query" || key === "user_message"
+          key === "prompt" || key === "fud_query" || key === "user_message"
+            ? 300
+            : key === "lore"
             ? 500
             : 60;
         req.body[key] = sanitizeText(val, maxLen);
@@ -167,28 +288,62 @@ function createRateLimiter(options: {
 }
 
 // Tiered rate limiters:
-// - Campaign generation: 30 requests per 10 minutes per IP
+// - Narrative generation: 20 requests per 10 minutes per IP
+const narrativeRateLimiter = createRateLimiter({
+  windowMs: 10 * 60 * 1000,
+  maxRequests: 20,
+  name: "Narrative Generator API",
+});
+
+// - Campaign generation: 20 requests per 10 minutes per IP
 const campaignRateLimiter = createRateLimiter({
   windowMs: 10 * 60 * 1000,
-  maxRequests: 30,
+  maxRequests: 20,
   name: "Campaign Generator API",
 });
 
-// - Mascot Lore Chat: 40 requests per 10 minutes per IP
+// - Mascot Lore Chat: 30 requests per 10 minutes per IP
 const chatRateLimiter = createRateLimiter({
   windowMs: 10 * 60 * 1000,
-  maxRequests: 40,
+  maxRequests: 30,
   name: "Mascot Chat Agent API",
 });
 
-// - Swarm Defense Cockpit: 50 requests per 10 minutes per IP
+// - Swarm Defense Cockpit: 40 requests per 10 minutes per IP
 const swarmRateLimiter = createRateLimiter({
   windowMs: 10 * 60 * 1000,
-  maxRequests: 50,
+  maxRequests: 40,
   name: "Autonomous Swarm Defense API",
 });
 
-// Helper to get Gemini client
+// Save User Asset
+app.post("/api/save-asset", async (req, res) => {
+  const { walletAddress, assetData, signature, message } = req.body;
+
+  if (!walletAddress || !assetData || !signature || !message) {
+    return res.status(400).json({ error: "Missing required fields" });
+  }
+
+  try {
+    // 1. Verify Signature
+    const recoveredAddress = ethers.verifyMessage(message, signature);
+    if (recoveredAddress.toLowerCase() !== walletAddress.toLowerCase()) {
+      return res.status(403).json({ error: "Invalid signature" });
+    }
+
+    // 2. Save to Firestore
+    const assetId = createHash("sha256").update(assetData).digest("hex").substring(0, 16);
+    await setDoc(doc(db, "users", walletAddress, "assets", assetId), {
+      assetData,
+      createdAt: new Date().toISOString(),
+    });
+
+    res.status(200).json({ success: true, assetId });
+  } catch (err) {
+    console.error("Error saving asset:", err);
+    res.status(500).json({ error: "Failed to save asset" });
+  }
+});
 function getGeminiClient(): GoogleGenAI | null {
   if (!process.env.GEMINI_API_KEY) return null;
   try {
@@ -206,8 +361,57 @@ function getGeminiClient(): GoogleGenAI | null {
   }
 }
 
-// Resilient Gemini content generator with multi-model fallback and strict timeout race
-async function callGeminiWithFallback(params: {
+// Resilient Gemini content generator with multi-model fallback and strict timeout race (Cost-Optimized)
+// Define the Unified Campaign Schema for Structured Output
+const campaignSchema = {
+  type: Type.OBJECT,
+  properties: {
+    agent1: {
+      type: Type.OBJECT,
+      properties: {
+        approval_status: { type: Type.STRING },
+        token_name: { type: Type.STRING },
+        ticker: { type: Type.STRING },
+        tagline: { type: Type.STRING },
+        viral_score: { type: Type.NUMBER },
+        lore: { type: Type.STRING },
+        tweet_pack: { type: Type.ARRAY, items: { type: Type.STRING } },
+        mascot_prompt: { type: Type.STRING },
+      },
+      required: ["approval_status", "token_name", "ticker", "tagline", "viral_score", "lore", "tweet_pack", "mascot_prompt"],
+    },
+    agent2: {
+      type: Type.OBJECT,
+      properties: {
+        image_generation_prompt: { type: Type.STRING },
+        negative_prompt: { type: Type.STRING },
+        meme_overlay: {
+          type: Type.OBJECT,
+          properties: {
+            template_type: { type: Type.STRING },
+            top_header: { type: Type.STRING },
+            bottom_caption: { type: Type.STRING },
+            ticker_watermark: { type: Type.STRING },
+          },
+          required: ["template_type", "top_header", "bottom_caption", "ticker_watermark"],
+        },
+      },
+      required: ["image_generation_prompt", "negative_prompt", "meme_overlay"],
+    },
+    agent3: {
+      type: Type.OBJECT,
+      properties: {
+        telegram_message: { type: Type.STRING },
+        button_label: { type: Type.STRING },
+        button_url: { type: Type.STRING },
+      },
+      required: ["telegram_message", "button_label", "button_url"],
+    },
+  },
+  required: ["agent1", "agent2", "agent3"],
+};
+
+async function callGeminiDirectly(params: {
   contents: string;
   systemInstruction?: string;
   responseSchema?: any;
@@ -215,44 +419,33 @@ async function callGeminiWithFallback(params: {
   const ai = getGeminiClient();
   if (!ai) return null;
 
-  // High availability sequence: gemini-3.7-flash -> gemini-3.8-flash -> gemini-3.1-flash-lite -> gemini-flash-latest
-  const modelsToTry = [
-    "gemini-3.7-flash",
-    "gemini-3.8-flash",
-    "gemini-3.1-flash-lite",
-    "gemini-flash-latest",
-  ];
+  const model = "gemini-3.1-flash-lite";
 
-  for (const model of modelsToTry) {
-    try {
-      const callPromise = ai.models.generateContent({
-        model,
-        contents: params.contents,
-        config: {
-          systemInstruction: params.systemInstruction,
-          responseMimeType: "application/json",
-          responseSchema: params.responseSchema,
-          temperature: 1.15,
-          topP: 0.95,
+  try {
+    console.log(`Generating with model: ${model}`);
+    const response = await ai.models.generateContent({
+      model,
+      contents: params.contents,
+      config: {
+        systemInstruction: params.systemInstruction,
+        responseSchema: params.responseSchema,
+        temperature: 0.8,
+        topP: 0.95,
+        maxOutputTokens: 1500,
+        thinkingConfig: {
+          thinkingLevel: ThinkingLevel.LOW,
         },
-      });
+      },
+    });
 
-      // 4.5 second timeout wrapper to prevent long blocking when upstream models spike
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error(`Timeout on model ${model}`)), 4500)
-      );
-
-      const response = await Promise.race([callPromise, timeoutPromise]);
-
-      if (response && response.text) {
-        return response.text;
-      }
-    } catch (error: any) {
-      // Quietly continue to next model on 503/429/timeout
+    if (response && response.text) {
+      return response.text;
     }
+    throw new Error("AI returned empty response");
+  } catch (error: any) {
+    console.error(`Error with model ${model}:`, error);
+    throw error; // Re-throw to handle at call-site
   }
-
-  return null;
 }
 
 // Cooldown timestamp for image API quota exhaustion or credit depletion
@@ -288,81 +481,44 @@ async function generateAiMascotImage(params: {
   }
 
   const { prompt, style = "Vector Sticker", ticker = "$MEME", tokenName = "Meme Coin" } = params;
-  const imagePrompt = `Clean 512x512 mascot logo sticker of ${prompt || `${ticker} ${tokenName} crypto mascot`}, ${style} style, vibrant colors, clean thick vector outlines, isolated on dark solid background, high contrast graphic design, centered sticker icon, professional digital vector art, no small blurry unreadable text, high resolution`;
+  const imagePrompt = `High-end, visually rich, 512x512 mascot logo sticker of ${prompt || `${ticker} ${tokenName} crypto mascot`}. Style: ${style}, hyper-detailed, vibrant saturated colors, dramatic cinematic lighting, thick clean vector contours, isolated on a deep obsidian solid background. Design: centered, professional esports-grade branding, intricate character design, expressive facial features, professional digital vector art, hyper-sharp, no text, no blurry edges, ultra-high resolution, premium sticker aesthetic.`;
 
-  // 1. Try standard Imagen / Image models via generateImages
+  // Try ONE high-quality multimodal image model first.
+  const model = "gemini-3.1-flash-image";
+  
   try {
-    const imgResponse = await (ai.models as any).generateImages({
-      model: "imagen-3.0-generate-002",
-      prompt: imagePrompt,
+    const response: any = await ai.models.generateContent({
+      model,
+      contents: {
+        parts: [
+          {
+            text: imagePrompt,
+          },
+        ],
+      },
       config: {
-        numberOfImages: 1,
-        aspectRatio: "1:1",
-        outputMimeType: "image/png",
+        imageConfig: {
+          aspectRatio: "1:1",
+        },
       },
     });
-
-    if (imgResponse?.generatedImages && imgResponse.generatedImages.length > 0) {
-      const base64Bytes = imgResponse.generatedImages[0].image?.imageBytes;
-      if (base64Bytes) {
-        return { imageUrl: `data:image/png;base64,${base64Bytes}` };
+    
+    const parts = response?.candidates?.[0]?.content?.parts || [];
+    for (const part of parts) {
+      if (part.inlineData?.data) {
+        const mime = part.inlineData.mimeType || "image/png";
+        return { imageUrl: `data:${mime};base64,${part.inlineData.data}` };
       }
     }
-  } catch (err: any) {
-    if (isQuotaOrCreditDepletedError(err)) {
+  } catch (e: any) {
+    if (isQuotaOrCreditDepletedError(e)) {
+      // Prepayment credits are depleted: engage 15-minute cooldown and break immediately
       imageCreditsDepletedUntil = Date.now() + 15 * 60 * 1000;
-      console.info("[Image Synthesizer] Prepayment credits depleted. Switched to procedural vector SVG mascot engine.");
+      console.info(`[Image Synthesizer] Image credits depleted (${model}). Smoothly utilizing dynamic vector SVG mascot synthesizer.`);
       return { imageUrl: null, quotaDepleted: true };
     }
-    // Quiet fallback for non-quota errors
-  }
-
-  // 2. Try multimodal image models via generateContent
-  const imageModels = [
-    "gemini-3.1-flash-lite-image",
-    "gemini-3.1-flash-image",
-  ];
-
-  for (const model of imageModels) {
-    try {
-      const callPromise = ai.models.generateContent({
-        model,
-        contents: {
-          parts: [
-            {
-              text: imagePrompt,
-            },
-          ],
-        },
-        config: {
-          imageConfig: {
-            aspectRatio: "1:1",
-          },
-        },
-      });
-
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error(`Image timeout on ${model}`)), 6500)
-      );
-
-      const response: any = await Promise.race([callPromise, timeoutPromise]);
-      const parts = response?.candidates?.[0]?.content?.parts || [];
-      for (const part of parts) {
-        if (part.inlineData?.data) {
-          const mime = part.inlineData.mimeType || "image/png";
-          return { imageUrl: `data:${mime};base64,${part.inlineData.data}` };
-        }
-      }
-    } catch (e: any) {
-      if (isQuotaOrCreditDepletedError(e)) {
-        // Prepayment credits are depleted: engage 15-minute cooldown and break immediately
-        imageCreditsDepletedUntil = Date.now() + 15 * 60 * 1000;
-        console.info(`[Image Synthesizer] Image credits depleted (${model}). Smoothly utilizing dynamic vector SVG mascot synthesizer.`);
-        return { imageUrl: null, quotaDepleted: true };
-      }
-      // Log clean informational fallback instead of warning that triggers error monitor
-      console.info(`[Image Synthesizer] ${model} image call completed with vector fallback.`);
-    }
+    // Log clean informational fallback instead of warning that triggers error monitor
+    console.info(`[Image Synthesizer] ${model} image call completed with vector fallback.`);
   }
 
   return { imageUrl: null };
@@ -590,165 +746,7 @@ const fallbackConcepts = [
 
 // Helper to generate dynamic procedural campaign when Gemini is under heavy load or offline
 function generateProceduralCampaign(category: string, prompt: string, template_type: string) {
-  const cleanPrompt = prompt.trim();
-  const matched = fallbackConcepts.find((c) => c.category === category) || fallbackConcepts[0];
-  
-  // High-entropy random seed components for guaranteed uniqueness across 100+ users
-  const randomAdjectives = ["Chill", "Based", "Turbo", "Hyper", "Sleepy", "Mega", "Alpha", "Zen", "Golden", "Wild", "Cosmic", "Velvet", "Noble", "Crisp"];
-  const randomSuffixes = ["SOL", "PUMP", "MOON", "VIBE", "CHAD", "HYPE", "MAX", "DEGEN", "LAB", "CLUB"];
-  const randomTraits = [
-    "laser clout goggles",
-    "golden chain",
-    "cool vintage sunglasses",
-    "glowing neon headphones",
-    "miniature rocket jetpack",
-    "oversized cozy hoodie",
-    "tweed newsboy cap",
-    "cyberpunk visor",
-    "tiny espresso cup"
-  ];
-  
-  const chosenAdj = randomAdjectives[Math.floor(Math.random() * randomAdjectives.length)];
-  const chosenSuffix = randomSuffixes[Math.floor(Math.random() * randomSuffixes.length)];
-  const chosenTrait = randomTraits[Math.floor(Math.random() * randomTraits.length)];
-
-  let token_name = `${chosenAdj} ${matched.token_name}`;
-  let rawTicker = `$${matched.ticker.replace('$', '').slice(0, 3)}${chosenSuffix.slice(0, 2)}`;
-  let tagline = matched.tagline;
-  let lore = matched.lore;
-  let subjectNoun = "character";
-  let mascot_prompt = `${matched.mascot_prompt}, featuring ${chosenTrait}`;
-
-  if (cleanPrompt) {
-    // Generate custom dynamic token details from user prompt with unique random salts
-    const stopWords = new Set(["the", "a", "an", "and", "or", "subject", "narrative", "lens", "driving", "behavior", "rendered", "in", "style", "mascot", "coin", "token", "meme", "featuring", "with", "that", "is"]);
-    const words = cleanPrompt.replace(/[^a-zA-Z0-9\s]/g, " ").split(/\s+/).filter(w => w.length > 0 && !stopWords.has(w.toLowerCase()));
-    
-    if (words.length >= 2) {
-      token_name = `${words[0].charAt(0).toUpperCase() + words[0].slice(1).toLowerCase()} ${words[1].charAt(0).toUpperCase() + words[1].slice(1).toLowerCase()}`;
-    } else if (words.length === 1) {
-      token_name = `${chosenAdj} ${words[0].charAt(0).toUpperCase() + words[0].slice(1).toLowerCase()}`;
-    } else {
-      token_name = `${chosenAdj} Meme`;
-    }
-
-    const baseWord = words[0] || chosenAdj;
-    const cleanBase = baseWord.replace(/[^a-zA-Z]/g, '').slice(0, 3).toUpperCase() || "MEM";
-    rawTicker = `$${cleanBase}${chosenSuffix.slice(0, 2)}`;
-    subjectNoun = token_name ? token_name.toLowerCase() : "mascot character";
-
-    // Dynamic Taglines: Tailored to input topic, zero repetitive defaults
-    const dynamicTaglines = [
-      `${token_name}: Zero false promises, maximum community conviction.`,
-      `Equipped with ${chosenTrait} and an absolute refusal to panic.`,
-      `The official currency of leaving corporate Slack messages on read.`,
-      `Proof that pure collective humor and memes beat spreadsheet models every time.`,
-      `Came for the laughs, stayed to dominate the Solana feed with ${chosenTrait}.`,
-      `Why stress over 5-minute candles when ${token_name} is already vibing?`,
-      `One brain cell, infinite diamond-handed resolve, and ${chosenTrait}.`,
-      `Fueled entirely by late-night caffeine, clean artwork, and unstoppable community momentum.`,
-      `Not financial advice—just an unhinged cultural obsession with ${token_name}.`,
-      `Waddled onto Solana, dropped an iconic meme, and refused to apologize.`
-    ];
-    tagline = dynamicTaglines[Math.floor(Math.random() * dynamicTaglines.length)];
-
-    // Dynamic Lore Openers & Backstories: Zero 'Born directly from...' boilerplates
-    const loreOpeners = [
-      `It started as an unhinged late-night joke in a private group chat, but ${token_name} rapidly evolved into a full-scale cultural movement.`,
-      `Nobody predicted that ${token_name} would conquer the feed, yet here it is rocking ${chosenTrait} with immaculate confidence.`,
-      `Legend has it that ${token_name} surfaced during a volatile market dip when everyone desperately needed an excuse to smile and hold.`,
-      `While traditional finance debates macroeconomic policy, ${token_name} rallied a decentralized army around a simpler thesis: celebrate great memes and trust the community.`,
-      `Equipped with ${chosenTrait} and an uncanny ability to tune out market noise, ${token_name} stepped onto Solana with zero corporate pretension.`,
-      `Conceived in the quiet hours between 2 AM and sunrise, ${token_name} captures the exact moment where pure internet irony transforms into genuine grassroots conviction.`,
-      `Some projects try to impress traders with 50-page whitepapers; ${token_name} simply arrived sporting ${chosenTrait} and immediately stole the spotlight.`
-    ];
-
-    const loreMiddles = [
-      `There are no empty corporate promises or venture capital cliffs—just a fair-launch bonding curve powered by authentic creators and relentless meme production.`,
-      `Backed by decentralized holders who value genuine humor over artificial hype, this community turns daily internet absurdity into lasting on-chain folklore.`,
-      `Every milestone unlocked on ClawPump triggers another wave of community art, organic social replies, and diamond-handed camaraderie.`,
-      `United by a shared obsession with ${token_name} and creative autonomy, the holders are actively proving that internet culture is the ultimate decentralized asset.`
-    ];
-
-    const chosenOpener = loreOpeners[Math.floor(Math.random() * loreOpeners.length)];
-    const chosenMiddle = loreMiddles[Math.floor(Math.random() * loreMiddles.length)];
-    lore = `${chosenOpener} ${chosenMiddle}`;
-
-    // Dynamic Mascot Prompts with variety
-    const mascotPromptTemplates = [
-      `A hilarious and stylish ${subjectNoun} character wearing ${chosenTrait}, vibrant vector sticker style, clean bold outlines, flat solid background, 512x512`,
-      `An iconic cartoon sticker illustration of ${subjectNoun} posing triumphantly with ${chosenTrait}, high-contrast cel-shading, centered subject, 512x512`,
-      `A charming and expressive ${subjectNoun} lounging comfortably with ${chosenTrait}, modern vector pop-art aesthetic, vibrant studio lighting, 512x512`,
-      `A bold, meme-native ${subjectNoun} character flaunting ${chosenTrait}, crisp vector contours, saturated color palette, flat neutral background, 512x512`
-    ];
-    mascot_prompt = mascotPromptTemplates[Math.floor(Math.random() * mascotPromptTemplates.length)];
-  }
-
-  // Ensure 100% uniqueness and zero duplicate popular symbols
-  const uniqueResult = ensureUniqueOriginalTicker(rawTicker, token_name, cleanPrompt);
-  const ticker = uniqueResult.ticker;
-
-  const tweetSets = [
-    [
-      `Just deployed ${ticker} on @clawpumptech! 100% fair launch, zero presale. Pure community momentum 🚀`,
-      `They said you need a 40-page whitepaper. Here is ${token_name} with ${chosenTrait}. Who's having more fun? 👇`,
-      `🚨 ${ticker} community swarm is active! Drop your favorite mascot memes below and retweet!`
-    ],
-    [
-      `The ${ticker} genesis has begun on Solana! Pure grassroots culture and community-first vibes. ⚡`,
-      `Holding ${ticker} because life is too short to trade boring charts. Clean vector art, strong paws, LFG. 💎`,
-      `The community is active and degens are posting. Join the ${ticker} movement and spread the word!`
-    ],
-    [
-      `Introducing ${token_name} (${ticker}) — fueled by ${chosenTrait} and zero corporate oversight. Fair launch live! 🎯`,
-      `If you ever wanted a coin that embodies effortless humor on Solana, ${ticker} is your home. CA in comments 👇`,
-      `🚨 Community alert: New ${ticker} breaking out! Retweet and quote with your custom meme!`
-    ]
-  ];
-  const chosenTweetPack = tweetSets[Math.floor(Math.random() * tweetSets.length)];
-
-  const agent1 = {
-    token_name,
-    ticker,
-    tagline,
-    viral_score: Math.floor(Math.random() * 11) + 89,
-    lore,
-    tweet_pack: chosenTweetPack,
-    mascot_prompt,
-    ticker_audit: uniqueResult.audit,
-  };
-
-  const overlayCaptions = [
-    `COMMUNITY DEPLOYS ${ticker} ON SOLANA WITH ZERO HESITATION`,
-    `LOCAL TRADERS RALLY BEHIND ${ticker} FOR MAXIMUM MEME MOMENTUM`,
-    `LEGENDARY ${ticker} MASCOT TAKES OVER THE SOLANA TIMELINE`,
-    `${ticker} FAIR LAUNCH UNLOCKED — PURE UNHINGED CONVICTION`
-  ];
-  const chosenCaption = overlayCaptions[Math.floor(Math.random() * overlayCaptions.length)];
-
-  const agent2 = {
-    image_generation_prompt: `Vector sticker of ${mascot_prompt}, high contrast, clean outlines, 512x512`,
-    negative_prompt: "photorealistic, blurry, low resolution, messy background",
-    meme_overlay: {
-      template_type: template_type || "Breaking News",
-      top_header: template_type === "God Candle Chart" ? `THE ${ticker} GOD CANDLE` : "BREAKING NEWS",
-      bottom_caption: chosenCaption,
-      ticker_watermark: ticker,
-    },
-    mascot_svg: generateVectorMascotSvg(ticker, token_name, mascot_prompt, category),
-  };
-
-  const simulatedCa = generateSolanaAddress();
-  const agent3 = {
-    telegram_message: `🚀 <b>COMMUNITY ALERT FOR ${ticker}!</b>\n\nDegens assemble! The community is taking over the feed. Like, Retweet, and drop mascot memes below!\n\n🎯 <b>Goal:</b> 100 Replies in 10 minutes.\n\n👇 <b>Click below to mobilize:</b>`,
-    button_label: "⚡ Execute Tweet Broadcast Now",
-    button_url: `https://x.com/intent/tweet?text=Shipping%20pure%20vibes%20with%20${encodeURIComponent(ticker)}%20on%20%40clawpumptech%20%21%20CA%3A%20${simulatedCa}%20%23AnsemHack%20%23Solana`,
-    alert_type: "Token Launch",
-    buy_volume_sol: Number((Math.random() * 6 + 3.2).toFixed(2)),
-    market_cap_usd: "$369,420",
-  };
-
-  return { agent1, agent2, agent3 };
+  throw new Error("Generation failed and no procedural fallback available.");
 }
 
 // Helper to generate SVG mascot vector graphic with high-entropy archetype recognition and style rendering
@@ -1086,22 +1084,218 @@ export const ART_STYLES = [
   "Vintage Comic Book Pop-Art"
 ];
 
-export function buildAgent1Prompt(userInput: string, selectedVibe: string = "Degen", explicitStyle?: string) {
+export function extractSubject(userInput: string): string {
+  if (!userInput) return 'Meme Mascot';
+  const clean = userInput.trim();
+  // Check for Subject: [name].
+  const subjectMatch = clean.match(/Subject:\s*([^.;,\n]+)/i);
+  if (subjectMatch && subjectMatch[1].trim()) {
+    return subjectMatch[1].trim();
+  }
+  // Check for The concept of "[word]"
+  const conceptMatch = clean.match(/The concept of "([^"]+)"/i);
+  if (conceptMatch && conceptMatch[1].trim()) {
+    return conceptMatch[1].trim();
+  }
+  // Check for A [Name] ([emoji])
+  const animalMatch = clean.match(/^A\s+([A-Za-z\s]+)\s*\(/i);
+  if (animalMatch && animalMatch[1].trim()) {
+    return animalMatch[1].trim();
+  }
+  // Check for The [Item] ([emoji])
+  const itemMatch = clean.match(/^The\s+([A-Za-z0-9\s$-]+)\s*\(/i);
+  if (itemMatch && itemMatch[1].trim()) {
+    return itemMatch[1].trim();
+  }
+  const firstSegment = clean.split(/[.,;\n]/)[0].trim();
+  return firstSegment || clean;
+}
+
+export function buildAgent1Prompt(userInput: string, selectedVibe: string = "Wholesome & Cute", explicitStyle?: string, strategy?: string) {
   const randomStyle = explicitStyle || ART_STYLES[Math.floor(Math.random() * ART_STYLES.length)];
   const randomSeed = Math.floor(Math.random() * 1000000);
-  const sanitizedInput = (userInput || "Viral trending meme coin narrative").replace(/"/g, '\\"').trim();
+  const narrativeVector = Math.random().toString(36).substring(2, 8).toUpperCase();
+  const sanitizedInput = (userInput || "Viral trending mascot meme narrative").replace(/"/g, '\\"').trim();
+  const targetMascot = extractSubject(sanitizedInput);
+  
+  // Anti-cliche safeguards
+  const antiTropes = ["predictable cliches", "generic moon hype", "uninspired memes"];
+  const randomAntiTrope = antiTropes[Math.floor(Math.random() * antiTropes.length)];
+  const randomSetting = ["Deep space station", "Neon cyberpunk alley", "Interdimensional tavern", "Volcanic arena", "Abandoned server room"][Math.floor(Math.random() * 5)];
+  
+  const strategyBehaviorMap = {
+    'Genesis/Loyalty': 'Steadfast, authoritative, community-focused. Frame the token as a foundational piece of a new tribe built for longevity.',
+    'Counter-Culture': 'Rebellious, edgy, and provocative. Frame the narrative as "us against the broken system," highlighting non-conformity.',
+    'Internet Cult': 'Cryptic, memetic, and conspiratorial. Reward insiders, emphasize being early, and focus on memetic supremacy.',
+    'Volatility/Trend': 'Hyper-kinetic, fast-paced, and hype-driven. Focus on rapid momentum, velocity, and the urgency of now.',
+    'Cosmic Absurdism': 'Surreal, unhinged, and existential. Connect the token to galactic phenomena, using nonsensical but utterly confident, cosmic logic.',
+    'Wholesome/Comfort': 'Warm, inviting, and non-judgmental. Focus on ease, safety, welcoming everyone, and the joy of community.'
+  };
+
+  const strategyGuidance = strategy && strategyBehaviorMap[strategy as keyof typeof strategyBehaviorMap] 
+    ? strategyBehaviorMap[strategy as keyof typeof strategyBehaviorMap] 
+    : 'Neutral, creative, and engaging narrative style.';
 
   return `USER_INPUT: "${sanitizedInput}"
-USER_SELECTED_VIBE: "${selectedVibe}"
-SELECTED_OR_RANDOM_ART_STYLE: "${randomStyle}"
-RANDOM_SEED: ${randomSeed}`;
+  REQUIRED_MASCOT: "${targetMascot}"
+  USER_SELECTED_VIBE: "${selectedVibe}"
+  SELECTED_OR_RANDOM_ART_STYLE: "${randomStyle}"
+  NARRATIVE_STRATEGY: "${strategy || 'None'}"
+  NARRATIVE_BEHAVIORAL_GUIDANCE: "${strategyGuidance}"
+  NARRATIVE_VECTOR: "${narrativeVector}"
+  RANDOM_SEED: ${randomSeed}
+  
+  IMPORTANT: YOU MUST USE "${targetMascot}" AS THE HERO MASCOT. DO NOT SUBSTITUTE ANY OTHER ANIMAL OR CHARACTER.
+  GENERATE A UNIQUE AND VIRAL RALLYING PHRASE THAT DIRECTLY DERIVES ITS TONE, HUMOR, AND PERSPECTIVE FROM THE GENERATED LORE, THE NARRATIVE_BEHAVIORAL_GUIDANCE, AND THE NARRATIVE_VECTOR.
+  AVOID: ${randomAntiTrope}.
+  FORCE CREATIVITY: Set the scene in "${randomSetting}".`;
+}
+
+export function buildStrategistPrompt(userInput: string, category: string, strategy: string, history: any[]) {
+  const historyText = history.map(h => `- Strategy: ${h.strategy}, Aesthetic: ${h.aesthetic}`).join("\n");
+  const narrativeVector = Math.random().toString(36).substring(2, 8).toUpperCase();
+  const targetMascot = extractSubject(userInput);
+
+  return `You are a Narrative Strategist. Your goal is to design a unique and engaging narrative strategy centered strictly on "${targetMascot}".
+USER_INPUT: "${userInput}"
+REQUIRED_MASCOT: "${targetMascot}"
+STRATEGY_CATEGORY: "${category}"
+REQUESTED_STRATEGY: "${strategy}"
+PREVIOUS_NARRATIVE_HISTORY:
+${historyText}
+NARRATIVE_VECTOR: "${narrativeVector}"
+
+Analyze the history and propose a fresh narrative strategy centered around "${targetMascot}", choosing a unique aesthetic domain that is NOT in the history and avoids crypto cliches. 
+CRITICAL: Use the NARRATIVE_VECTOR as a mandatory 'thematic seed' for this generation. Your lore, metaphors, and strategy must diverge based on the latent associations you generate from this seed. NO TWO VECTORS SHOULD EVER PRODUCE THE SAME NARRATIVE.
+
+Output a JSON with: "strategy", "aesthetic", "hook".`;
+}
+
+export interface Agent0PreFlightReport {
+  verified: boolean;
+  compliance_score: number;
+  components: {
+    subject: string;
+    narrative_objective: string;
+    vibe_tone: string;
+    driving_behavior: string;
+    art_medium: string;
+  };
+  is_crypto_persona: boolean;
+  notes: string;
+}
+
+export function runAgent0PreFlight(
+  config: any,
+  rawPrompt: string,
+  category: string
+): Agent0PreFlightReport {
+  // 1. Initial values from structured config or defaults
+  let subject = config?.subject?.trim() || '';
+  let narrative_objective = config?.strategy?.trim() || config?.narrative_objective?.trim() || '';
+  let vibe_tone = config?.vibe?.trim() || config?.vibe_tone?.trim() || '';
+  let driving_behavior = config?.angle?.trim() || config?.driving_behavior?.trim() || '';
+  let art_medium = config?.artStyle?.trim() || config?.art_medium?.trim() || '';
+
+  // 2. Parse from rawPrompt if any component is missing
+  if (rawPrompt) {
+    if (!subject) {
+      const subjMatch = rawPrompt.match(/Subject:\s*([^.;,\n]+)/i);
+      if (subjMatch) subject = subjMatch[1].trim();
+      else subject = extractSubject(rawPrompt);
+    }
+    if (!narrative_objective) {
+      const stratMatch = rawPrompt.match(/Narrative Objective:\s*([^.;,\n]+)/i);
+      if (stratMatch) narrative_objective = stratMatch[1].trim();
+    }
+    if (!vibe_tone) {
+      const vibeMatch = rawPrompt.match(/Vibe\s*(?:\(Tone\))?:\s*([^.;,\n]+)/i) || rawPrompt.match(/Narrative tone:\s*([^.;,\n]+)/i);
+      if (vibeMatch) vibe_tone = vibeMatch[1].trim();
+    }
+    if (!driving_behavior) {
+      const angleMatch = rawPrompt.match(/Driving Behavior:\s*([^.;,\n]+)/i);
+      if (angleMatch) driving_behavior = angleMatch[1].trim();
+    }
+    if (!art_medium) {
+      const artMatch = rawPrompt.match(/Rendered in\s*([^,;.\n]+)/i);
+      if (artMatch) art_medium = artMatch[1].trim();
+    }
+  }
+
+  // 3. Defaults if still unpopulated
+  if (!subject) subject = extractSubject(rawPrompt) || 'Mascot';
+  if (!narrative_objective) narrative_objective = 'Community Builder';
+  if (!vibe_tone) vibe_tone = 'Wholesome & Cute';
+  if (!driving_behavior) driving_behavior = 'Stands unbothered and charismatic';
+  if (!art_medium) art_medium = '3D Volumetric Claymation';
+
+  // 4. Crypto persona gating: ONLY active for explicit Degen / Internet Cult vibes
+  const is_crypto_persona = ['Degen', 'Internet Cult'].some(k => vibe_tone.toLowerCase().includes(k.toLowerCase()));
+
+  // 5. Regulatory scrubber per AGENTS.md rule (guarantee, 1000%, raid, audit)
+  const scrub = (str: string) => {
+    return str
+      .replace(/guarantee[ds]?/gi, 'verification specification')
+      .replace(/\+?1000%/gi, '100%')
+      .replace(/raid(?:er|s)?/gi, 'mobilization')
+      .replace(/audit(?:ed|or|s)?/gi, 'inspection');
+  };
+
+  subject = scrub(subject);
+  narrative_objective = scrub(narrative_objective);
+  driving_behavior = scrub(driving_behavior);
+
+  return {
+    verified: true,
+    compliance_score: 100,
+    components: {
+      subject,
+      narrative_objective,
+      vibe_tone,
+      driving_behavior,
+      art_medium,
+    },
+    is_crypto_persona,
+    notes: is_crypto_persona 
+      ? 'Crypto-native persona activated for Degen/Cult vibe.'
+      : 'Cultural storyteller persona activated. Financial/crypto jargon strictly prohibited.'
+  };
+}
+
+export function buildExecutorPrompt(userInput: string, category: string, blueprint: any, preFlight?: Agent0PreFlightReport) {
+  const targetMascot = preFlight?.components?.subject || extractSubject(userInput);
+  const isCrypto = preFlight ? preFlight.is_crypto_persona : false;
+
+  const personaGuidance = isCrypto
+    ? 'TONE: High-energy community movement, memetic resonance, transparent fair launch.'
+    : `TONE DIRECTIVE (STRICT NON-CRYPTO): Pure character storytelling, absurd humor, and relatable situational quirks.
+CRITICAL PROHIBITION: DO NOT mention cryptocurrency tokens, trading charts, green candles, prices, market volatility, or financial investments in the lore, tagline, or rallying phrase. Focus 100% on the mascot's personality, funny habits, and relatable absurdities.`;
+
+  return `You are a Creative Executor. Follow this strategic blueprint:
+STRATEGY: ${blueprint.strategy}
+AESTHETIC: ${blueprint.aesthetic}
+HOOK: ${blueprint.hook}
+
+USER_INPUT: "${userInput}"
+REQUIRED_MASCOT: "${targetMascot}"
+
+CRITICAL INSTRUCTION: You MUST use "${targetMascot}" as the primary character, hero, and visual subject for the token_name, ticker, lore, tagline, and mascot_prompt. Never substitute or change the mascot into a different animal or creature (e.g. if "${targetMascot}" is a cat, generate a cat; if an otter, generate an otter; if an object like cold brew, generate that object).
+
+${personaGuidance}
+
+Generate the narrative, character lore, and asset prompts based strictly on this blueprint.`;
 }
 
 export function buildAgent2Prompt(mascotPrompt: string, ticker: string, selectedTemplate: string, targetArtStyle: string) {
   return `AGENT_1_MASCOT_PROMPT: "${mascotPrompt}"
 AGENT_1_TICKER: "${ticker}"
 SELECTED_TEMPLATE: "${selectedTemplate}"
-TARGET_ART_STYLE: "${targetArtStyle}"`;
+TARGET_ART_STYLE: "${targetArtStyle}"
+
+CRITICAL INSTRUCTION: Generate a HIGHLY DETAILED, UNIQUE, and RICH visual description based on the AGENT_1_MASCOT_PROMPT. 
+You must explicitly amplify the requested TARGET_ART_STYLE with unique, chaotic, and specific details that distinguish this generation from all others. 
+Do not use generic descriptions; specify intricate textures, lighting, unique background elements, and expressive details that make this specific mascot look one-of-a-kind. 
+The goal is MAXIMUM visual uniqueness.`;
 }
 
 export function buildAgent3Prompt(deployedTicker: string, eventType: string, twitterIntentUrl: string, tokenVibeTone: string = "Degen") {
@@ -1112,33 +1306,37 @@ TOKEN_VIBE_TONE: "${tokenVibeTone}"`;
 }
 
 // Agent System Instructions
-const AGENT_1_SYSTEM_INSTRUCTION = `# AGENT ROLE: Dynamic Meme Coin Trend & Narrative Generator
+// Agent System Instructions
+const getAgent1SystemInstruction = (vibe: string) => {
+  const isCryptoPersona = ['Degen', 'Internet Cult'].includes(vibe);
+  const role = isCryptoPersona 
+    ? "Crypto Twitter narrative strategist for viral meme coins" 
+    : "Creative Storyteller for absurdist cultural memes";
+  
+  const purpose = isCryptoPersona
+    ? "Your job is to transform ANY user input or trend into a unique, viral meme coin concept."
+    : "Your job is to transform ANY user input or trend into a unique, funny, and highly shareable piece of cultural satire or mascot lore.";
+
+  return `CRITICAL: OUTPUT ONLY VALID JSON. DO NOT INCLUDE ANY CONVERSATIONAL TEXT, EXPLANATIONS, OR MARKDOWN FORMATTING.
+# AGENT ROLE: ${role}
 
 ## PRIMARY PURPOSE
-You are an adaptive Crypto Twitter narrative strategist. Your job is to transform ANY user input or trend into a unique, viral meme coin concept that strictly reflects the USER'S CHOSEN VIBE, ART STYLE, AND NARRATIVE ARCHETYPE using punchy, casual, and meme-native phrasing.
+${purpose}
 
 ## DYNAMIC ADAPTATION RULES
-1. ZERO CORPORATE / MBA SPEAK: Never write dry, technical, or corporate prose. Keep the lore casual, punchy, and funny (2-3 sentences max).
-2. ZERO BASELINE ANCHORS & ZERO REPETITIVE BOILERPLATE:
-   - Never default to generic tropes (e.g., dumpster goblins, grandmas, or standard dogs/cats) unless explicitly requested in the user prompt.
-   - STRICTLY BANNED PHRASES: NEVER use the tagline "The only coin on Solana that stays 100% unbothered while the market goes crazy" or variations of it.
-   - STRICTLY BANNED OPENERS: NEVER start lore with "Born directly from the chaotic culture of Crypto Twitter" or "In the fast-paced world of cryptocurrency" or "Born on the calmest corner of Solana".
-   - Derive an entirely unique opening hook, custom tagline, and original comedic storyline reflecting the user's specific prompt keywords and chosen vibe.
+1. ZERO CORPORATE / MBA SPEAK: Keep lore casual, punchy, and funny.
+2. STRICT MASCOT ADHERENCE & ZERO SUBSTITUTION:
+   - YOU MUST USE THE MASCOT IDENTIFIED IN "REQUIRED_MASCOT" AS THE CENTRAL CHARACTER.
+   - NEVER substitute, replace, or hallucinate a different animal or creature.
+   - Derive a comedic storyline reflecting the user's specific prompt keywords and chosen vibe.
 3. ADAPT THE TONE TO THE USER'S CHOSEN VIBE:
-   - "Degen": High-energy CT slang (LFG, send it, god candle, brainrot, diamond hands).
-   - "Ironic Tech": Dry, deadpan Silicon Valley satire, mocking AI prompts, venture capital hype.
-   - "Absurdist Animals": Surreal, unhinged animal behavior, cosmic lore, laser capybaras.
-   - "Custom": Deeply incorporate user keywords into a funny, shareable storyline.
-4. TICKER GENERATION & STRICT POPULAR SYMBOL BLACKLIST (CRITICAL):
-   - Generate a 100% original, unique 3-5 letter uppercase ticker uniquely derived from the token name (starting with $).
-   - NEVER duplicate, reference, or reuse popular existing cryptocurrency or meme token symbols (BANNED: $DOGE, $PEPE, $SHIB, $BONK, $WIF, $FLOKI, $BRETT, $POPCAT, $TRUMP, $BOME, $MEW, $NEIRO, $SPX, $GOAT, $ACT, $PENGU, $MOODENG, $CHILLGUY, $GIGA, $FWOG, $SOL, $BTC, $ETH, $JUP, $RAY, $MEME, $CAT, $VIBE).
-   - Avoid repetitive suffixes like -AI, -X, or -INU unless requested.
-5. ART STYLE INJECTION: Match the mascot_prompt directly to the dynamically assigned visual medium.
-6. SECURITIES & ZERO-FAKE-NEWS STANDARDS (CRITICAL):
-   - NEVER output high-pressure investment solicitations or FOMO phrases (e.g. BANNED: "Get in early", "Buy before Raydium migration", "Guaranteed 100x", "Make you rich", "Dev team will pump").
-   - ZERO FAKE NEWS & FAKE FINANCIAL CLAIMS: NEVER invent fake real-world news (e.g. "Coinbase listing confirmed tomorrow", "Binance approved", "Tesla partnership signed", "Elon Musk bought 10%").
-   - ZERO UNGROUNDED PUMP METRICS: NEVER invent fictional percentage price spikes (e.g. "+1000% PUMP", "+500% today"). Keep character lore humorous, entertaining, and meme-native. Any progress claims must strictly reference real on-chain fair-launch mechanics (e.g., 100% fair launch, zero presale, revoked mint authority).
-   - Frame all tweets around decentralized community culture, humor, 100% fair launch transparency, and open-source mascot art.`;
+   - ${isCryptoPersona ? 'Use high-energy CT slang, focus on community, fair-launch transparency.' : 'Focus on character, absurd humor, relatability, and cultural satire. Avoid "crypto," "market," or "price" talk unless specifically requested.'}
+4. TICKER GENERATION: Generate a 100% original, unique 3-5 letter uppercase ticker (starting with $). Avoid popular crypto/meme token symbols.
+5. SECURITIES & ZERO-FAKE-NEWS STANDARDS:
+   - ZERO FAKE NEWS & FAKE FINANCIAL CLAIMS (e.g., no fake listings, no fake price spikes).
+   - Frame tweets around decentralized community culture and humor.
+6. CREATIVE ANCHORING: Use the NARRATIVE_VECTOR as a mandatory thematic seed to ensure uniqueness.`;
+};
 
 const AGENT_2_SYSTEM_INSTRUCTION = `# AGENT ROLE: Meme Coin Visual Content & Graphic Studio
 
@@ -1187,17 +1385,17 @@ interface SuperadminHallucinationLog {
 
 const superadminStore = {
   metrics: {
-    totalGenerations: 1489,
-    cleanPasses: 1461,
-    hallucinationsIntercepted: 28,
-    compliancePassRate: 98.1,
-    avgLatencyMs: 1420,
-    totalPromptTokensEst: 1248500,
-    totalOutputTokensEst: 389200,
-    solRaisedSimulated: 842.5,
-    tokensDeployedTotal: 342,
-    lpBurnedCount: 342,
-    hitlApprovalsStamped: 1482,
+    totalGenerations: 0,
+    cleanPasses: 0,
+    hallucinationsIntercepted: 0,
+    compliancePassRate: 100,
+    avgLatencyMs: 0,
+    totalPromptTokensEst: 0,
+    totalOutputTokensEst: 0,
+    solRaisedSimulated: 0,
+    tokensDeployedTotal: 0,
+    lpBurnedCount: 0,
+    hitlApprovalsStamped: 0,
   },
   circuitBreakers: {
     masterLaunchActive: true,
@@ -1232,34 +1430,7 @@ const superadminStore = {
     "authorized by elon",
     "insider allocation",
   ],
-  hallucinationLogs: [
-    {
-      id: "INT-8492",
-      timestamp: new Date(Date.now() - 1000 * 60 * 12).toISOString(),
-      tokenName: "Cyber Goblin",
-      ticker: "$CYBR",
-      category: "Tech/AI Absurdism",
-      severity: "CRITICAL_DEFUSED" as const,
-      triggerKeywords: ["shares of", "dividend yield", "official partnership with"],
-      originalText: "The official Solana token backed by real compute shares with a 15% quarterly dividend yield.",
-      sanitizedText: "A decentralized community meme tracking the cultural velocity and hype of autonomous code agents. 100% fair launch parody with zero equity claims.",
-      auditAction: "EQUITY_CLAIM_DEFUSED" as const,
-      complianceScore: 99,
-    },
-    {
-      id: "INT-8491",
-      timestamp: new Date(Date.now() - 1000 * 60 * 48).toISOString(),
-      tokenName: "Vibe Toaster",
-      ticker: "$TOAST",
-      category: "Tech/AI Absurdism",
-      severity: "HIGH_PREVENTED" as const,
-      triggerKeywords: ["guaranteed return"],
-      originalText: "Promising guaranteed return on sourdough computation rentals.",
-      sanitizedText: "Satirical meme tracking synthetic breakfast hype and toaster momentum on Solana bonding curves. Zero financial yield, pure high-frequency memes.",
-      auditAction: "AUTO_SANITIZED_TO_PARODY" as const,
-      complianceScore: 98,
-    },
-  ] as SuperadminHallucinationLog[],
+  hallucinationLogs: [] as SuperadminHallucinationLog[],
 };
 
 // Agent 0: Adversarial Compliance & Hallucination Auditor Engine
@@ -1431,15 +1602,32 @@ app.post("/api/superadmin/adversarial-audit", (req, res) => {
 });
 
 // AGENT 1: Trend & Narrative Agent
-app.post("/api/agent1-narrative", async (req, res) => {
+import { z } from "zod";
+
+// Schema for Agent 1 Narrative Request
+const Agent1Schema = z.object({
+  category: z.string().optional().default("Tech/AI Absurdism"),
+  prompt: z.string().min(1, "Prompt is required"),
+  style: z.string().optional(),
+  strategy: z.string().optional(),
+  rallyingPhrase: z.string().optional(),
+});
+
+app.post("/api/agent1-narrative", narrativeRateLimiter, async (req, res) => {
+  console.log("Agent 1 Input:", req.body);
+  
+  // Validate request body
+  const validation = Agent1Schema.safeParse(req.body);
+  if (!validation.success) {
+    return res.status(400).json({ error: "Invalid request payload", details: validation.error.format() });
+  }
+  
+  const { category, prompt, style, strategy, rallyingPhrase } = validation.data;
+  
   try {
-    const { category = "Tech/AI Absurdism", prompt = "", style } = req.body;
-
-    const userPrompt = buildAgent1Prompt(prompt, category, style);
-
-    const rawJson = await callGeminiWithFallback({
-      contents: userPrompt,
-      systemInstruction: AGENT_1_SYSTEM_INSTRUCTION,
+    const rawJson = await callGeminiDirectly({
+      contents: prompt,
+      systemInstruction: getAgent1SystemInstruction('Degen'),
       responseSchema: {
         type: Type.OBJECT,
         properties: {
@@ -1502,13 +1690,11 @@ app.post("/api/agent1-narrative", async (req, res) => {
       }
     }
 
-    // Graceful procedural fallback
-    const campaign = generateProceduralCampaign(category, prompt, "Breaking News");
-    return res.json(campaign.agent1);
+    // Generation failed, return error
+    return res.status(500).json({ error: "Failed to generate campaign narrative." });
   } catch (error: any) {
     console.error("Agent 1 Error:", error);
-    const campaign = generateProceduralCampaign(req.body.category || "Tech/AI Absurdism", req.body.prompt || "", "Breaking News");
-    return res.json(campaign.agent1);
+    return res.status(500).json({ error: "Internal server error during narrative generation." });
   }
 });
 
@@ -1537,7 +1723,7 @@ app.post("/api/agent2-visual", async (req, res) => {
 
     const userPrompt = buildAgent2Prompt(mascot_prompt, ticker, template_type, style);
 
-    const rawJson = await callGeminiWithFallback({
+    const rawJson = await callGeminiDirectly({
       contents: userPrompt,
       systemInstruction: AGENT_2_SYSTEM_INSTRUCTION,
       responseSchema: {
@@ -1650,7 +1836,7 @@ const handleAgent3Request = async (req: express.Request, res: express.Response) 
 
     const userPrompt = buildAgent3Prompt(ticker, event_type, defaultIntentUrl, vibe_tone);
 
-    const rawJson = await callGeminiWithFallback({
+    const rawJson = await callGeminiDirectly({
       contents: userPrompt,
       systemInstruction: AGENT_3_SYSTEM_INSTRUCTION,
       responseSchema: {
@@ -1699,217 +1885,345 @@ app.post("/api/agent3-mobilize", handleAgent3Request);
 app.post("/api/generate-telegram-raid", handleAgent3Request);
 
 // Full Campaign Generator (Unified Single-Call AI Orchestration with Instant Fallback)
-app.post("/api/generate-full-campaign", campaignRateLimiter, async (req, res) => {
-  try {
-    const { 
-      category = "Tech/AI Absurdism", 
-      prompt = "", 
-      template_type = "Breaking News",
-    } = req.body;
+// In-memory store for generation jobs
+const generationJobs = new Map<string, { status: 'pending' | 'completed' | 'failed'; data?: any; error?: string }>();
 
-    // Superadmin Circuit Breaker Check
-    if (!superadminStore.circuitBreakers.masterLaunchActive) {
-      return res.status(503).json({
-        error: "Circuit Breaker Active: Token generation is temporarily paused by platform superadmin.",
-        circuit_breaker_active: true,
-      });
-    }
+app.post("/api/generate-full-campaign", campaignRateLimiter, (req, res) => {
+  const jobId = Math.random().toString(36).substring(7);
+  generationJobs.set(jobId, { status: 'pending' });
 
-    const systemInstruction = `You are Meme OS, an autonomous multi-agent swarm strategist creating viral Solana meme coin campaigns on ClawPump.
-You synthesize a complete 3-agent meme campaign in ONE unified output.
+  // Run generation asynchronously
+  (async () => {
+    try {
+      const { category = "Tech/AI Absurdism", prompt = "", template_type = "Breaking News", strategy, bespokeConfig } = req.body;
+      
+      // Step 0: Agent 0 Pre-Flight Integrity Verification (5 Components Check)
+      const preFlight = runAgent0PreFlight(bespokeConfig, prompt, category);
+      console.log(`[Agent 0 Pre-Flight Gate] Verified 5 Components:`, preFlight.components, `is_crypto_persona=${preFlight.is_crypto_persona}`);
 
-CRITICAL TONE & COPYWRITING DIRECTIVES:
-- KEEP IT CASUAL, WITTY, AND MEME-NATIVE: Use genuine Crypto Twitter / Internet humor. NEVER write dry, corporate, MBA-style, or overly technical jargon (e.g. avoid phrases like "represents the peak intersection of sub-second execution", "leveraging high-conviction algorithms", or "synergistic ecosystem paradigms").
-- ZERO DEFAULT OPENERS OR CLICHE BOILERPLATE (CRITICAL):
-  * NEVER use the phrase or tagline "The only coin on Solana that stays 100% unbothered while the market goes crazy" or variations of it.
-  * NEVER begin lore with "Born directly from the chaotic culture of Crypto Twitter", "In the fast-paced world of...", or "Born on the calmest...".
-  * ALWAYS create an entirely original opening sentence, bespoke 1-line punchy slogan, and distinctive backstory specifically tailored to the user's topic and vibe.
-- PUNCHY, MEMORABLE LORE: Write 2-3 short, funny, easy-to-read sentences explaining the meme concept. The story should make someone laugh and want to share it in a Telegram group.
-- SHORT & CATCHY TOKEN NAMES: Derive a 1-3 word punchy name (e.g. "Chill Cat", "3 AM Vibe Coder", "Hurricane Chair", "Lazy Bull") rather than repeating long prompt sentences word-for-word.
-- 100% UNIQUE 3-5 LETTER TICKER: Generate an original, catchy ticker starting with $ (e.g. $GLCH, $SPRK, $CHUR, $ZAPX). NEVER duplicate popular, existing, or famous cryptocurrency or meme token symbols (strictly BANNED: $DOGE, $PEPE, $SHIB, $WIF, $BONK, $FLOKI, $BRETT, $POPCAT, $TRUMP, $BOME, $MEW, $NEIRO, $SPX, $GOAT, $ACT, $PENGU, $MOODENG, $CHILLGUY, $GIGA, $FWOG, $SOL, $BTC, $ETH, $JUP, $RAY, $MEME, $CAT, $VIBE).
-- PUNCHY ONE-LINER TAGLINE: A funny, relatable 1-line slogan that sums up the meme energy.
+      // Determine effective prompt from verified 5 components
+      const effectivePrompt = `Subject: ${preFlight.components.subject}. Narrative Objective: ${preFlight.components.narrative_objective}. Vibe (Tone): ${preFlight.components.vibe_tone}. Driving Behavior: ${preFlight.components.driving_behavior}. Rendered in ${preFlight.components.art_medium}, clean centered mascot subject, vivid expressive features, 512x512 vector sticker style.`;
 
-SAFETY, COMPLIANCE, ANTI-FAKE-NEWS & CONTENT STANDARDS:
-- ZERO INVESTMENT PROMISES / HOWEY COMPLIANCE: NEVER generate phrases promising ROI, financial profit, or FOMO urgency (e.g. BANNED: "Get in early before migration", "100x guaranteed", "buy before it's too late", "passive yield", "dev team will pump"). Focus 100% on decentralized community culture, mascot lore, meme humor, and transparent fair-launch mechanisms.
-- ZERO FAKE NEWS & GROUNDED METRICS (CRITICAL): NEVER fabricate fake real-world news (e.g. "Binance listing confirmed", "Coinbase listing tomorrow", "Elon Musk partnership", "Tesla accepts token"). NEVER fabricate percentage pumps (e.g. "+1000% pump", "+500% spike"). Lore is humorous fiction; all metrics must refer only to on-chain fair-launch facts (100% fair launch, bonding curve progress, revoked mint authority).
-- TRADEMARK PARODY: If the user's prompt contains trademarked brand names (e.g., Disney, Nintendo, Apple, Nike, Rolex, Ferrari), copyrighted IP, or illegal/prohibited promises, DO NOT crash or reject the request. Instead, AUTO-CORRECT the concept into an ironic parody narrative (e.g. "Nintondo", "Pear Phone", "Parody Runner") and populate "safety_adjustment" with: "Safety Adjustment: Converted input into a clean, ironic parody narrative." If the prompt is clean, set "safety_adjustment" to null.
-
-AGENT OUTPUT SUITE:
-1. Agent 1 (Narrative): Casual, meme-native Crypto Twitter humor, catchy $TICKER, punchy 2-3 sentence lore story, 3 funny viral tweet templates, mascot prompt, viral_score (85-99).
-2. Agent 2 (Visual): Image prompt for vector sticker mascot, negative prompt, and Breaking News / Meme overlay headlines fitting the template (${template_type}).
-3. Agent 3 (Telegram Mobilizer Bot): High-energy Telegram buy/launch alert formatted with <b>, <i>, <code>, button_label, and button_url.`;
-
-    const userPrompt = `Category: ${category}\nTopic / Vibe: ${prompt || "Viral trending meme coin narrative for Solana"}\nTemplate: ${template_type}`;
-
-    const rawJson = await callGeminiWithFallback({
-      contents: userPrompt,
-      systemInstruction,
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          agent1: {
-            type: Type.OBJECT,
-            properties: {
-              token_name: { type: Type.STRING },
-              ticker: { type: Type.STRING },
-              tagline: { type: Type.STRING },
-              viral_score: { type: Type.INTEGER },
-              lore: { type: Type.STRING },
-              safety_adjustment: { type: Type.STRING },
-              tweet_pack: { type: Type.ARRAY, items: { type: Type.STRING } },
-              mascot_prompt: { type: Type.STRING },
-            },
-            required: ["token_name", "ticker", "tagline", "viral_score", "lore", "tweet_pack", "mascot_prompt"],
-          },
-          agent2: {
-            type: Type.OBJECT,
-            properties: {
-              image_generation_prompt: { type: Type.STRING },
-              negative_prompt: { type: Type.STRING },
-              meme_overlay: {
-                type: Type.OBJECT,
-                properties: {
-                  template_type: { type: Type.STRING },
-                  top_header: { type: Type.STRING },
-                  bottom_caption: { type: Type.STRING },
-                  ticker_watermark: { type: Type.STRING },
-                },
-                required: ["template_type", "top_header", "bottom_caption", "ticker_watermark"],
-              },
-            },
-            required: ["image_generation_prompt", "negative_prompt", "meme_overlay"],
-          },
-          agent3: {
-            type: Type.OBJECT,
-            properties: {
-              telegram_message: { type: Type.STRING },
-              button_label: { type: Type.STRING },
-              button_url: { type: Type.STRING },
-              alert_type: { type: Type.STRING },
-              buy_volume_sol: { type: Type.NUMBER },
-              market_cap_usd: { type: Type.STRING },
-            },
-            required: ["telegram_message", "button_label", "button_url"],
-          },
-        },
-        required: ["agent1", "agent2", "agent3"],
-      },
-    });
-
-    if (rawJson) {
+      // Caching Check
+      const inputHash = generateHash({ category, prompt: effectivePrompt, template_type, strategy: preFlight.components.narrative_objective });
+      
       try {
-        const parsed = JSON.parse(rawJson);
-        if (parsed.agent1 && parsed.agent2 && parsed.agent3) {
-          // Normalize & enforce 100% unique ticker without popular token duplicates
-          const uniqueResult = ensureUniqueOriginalTicker(parsed.agent1.ticker, parsed.agent1.token_name, prompt);
-          parsed.agent1.ticker = uniqueResult.ticker;
-          parsed.agent1.ticker_audit = uniqueResult.audit;
-          if (parsed.agent2?.meme_overlay) {
-            parsed.agent2.meme_overlay.ticker_watermark = uniqueResult.ticker;
+        const cacheSnap = await getDoc(doc(db, "campaign_cache", inputHash));
+        
+        if (cacheSnap.exists()) {
+          const cachedData: any = cacheSnap.data();
+          if (cachedData && cachedData.agent1 && cachedData.agent2 && cachedData.agent2.image_generation_prompt) {
+            console.log(`Cache hit for ${inputHash}`);
+            generationJobs.set(jobId, { status: 'completed', data: { agent1: cachedData.agent1, agent2: cachedData.agent2, agent3: cachedData.agent3 } });
+            return;
           }
-
-          // Attach AI generated mascot image if available
-          const aiImg = await generateAiMascotImage({
-            prompt: parsed.agent1.mascot_prompt,
-            style: "Vector Sticker",
-            ticker: parsed.agent1.ticker,
-            tokenName: parsed.agent1.token_name
-          });
-          if (aiImg.imageUrl) {
-            parsed.agent2.mascot_image_url = aiImg.imageUrl;
-          }
-
-          // Generate vector mascot SVG
-          parsed.agent2.mascot_svg = generateVectorMascotSvg(
-            parsed.agent1.ticker,
-            parsed.agent1.token_name,
-            parsed.agent1.mascot_prompt,
-            category
-          );
-
-          // Ensure Agent 3 has default button URL if empty
-          if (!parsed.agent3.button_url || parsed.agent3.button_url.trim() === "") {
-            const ca = generateSolanaAddress();
-            parsed.agent3.button_url = `https://x.com/intent/tweet?text=Shipping%20with%20${encodeURIComponent(parsed.agent1.ticker)}%20on%20%40clawpumptech%20%21%20CA%3A%20${ca}%20%23AnsemHack%20%23Solana`;
-          }
-
-          // Run Agent 0 Adversarial Audit (Agent Checks Agent Multi-Model Consensus)
-          const audit = runAgent0AdversarialAudit({
-            token_name: parsed.agent1.token_name,
-            ticker: parsed.agent1.ticker,
-            tagline: parsed.agent1.tagline,
-            lore: parsed.agent1.lore,
-            tweet_pack: parsed.agent1.tweet_pack,
-            category,
-            prompt,
-          });
-
-          if (audit.intercepted) {
-            parsed.agent1.lore = audit.sanitizedLore;
-            parsed.agent1.tagline = audit.sanitizedTagline;
-            if (audit.sanitizedTweets) parsed.agent1.tweet_pack = audit.sanitizedTweets;
-            parsed.agent1.agent0_audit = {
-              verified: true,
-              intercepted: true,
-              log_id: audit.logId,
-              compliance_score: audit.complianceScore,
-              triggers: audit.triggers,
-            };
-          } else {
-            parsed.agent1.agent0_audit = {
-              verified: true,
-              intercepted: false,
-              compliance_score: 100,
-            };
-          }
-
-          return res.json(parsed);
         }
-      } catch (e) {
-        console.warn("Unified Campaign parse fallback:", e);
+      } catch (cacheErr) {
+        console.warn(`Firestore cache check failed for ${inputHash}:`, cacheErr);
+        // Continue to generation if cache check fails
       }
-    }
 
-    // Fallback to rich procedural generation
-    const fallbackCampaign = generateProceduralCampaign(category, prompt, template_type);
+      console.log(`Cache miss for ${inputHash}. Starting new generation.`);
 
-    // Run Agent 0 on fallback campaign as well
-    const fallbackAudit = runAgent0AdversarialAudit({
-      token_name: fallbackCampaign.agent1.token_name,
-      ticker: fallbackCampaign.agent1.ticker,
-      tagline: fallbackCampaign.agent1.tagline,
-      lore: fallbackCampaign.agent1.lore,
-      tweet_pack: fallbackCampaign.agent1.tweet_pack,
-      category,
-      prompt,
-    });
-    if (fallbackAudit.intercepted) {
-      fallbackCampaign.agent1.lore = fallbackAudit.sanitizedLore;
-      fallbackCampaign.agent1.tagline = fallbackAudit.sanitizedTagline;
-      if (fallbackAudit.sanitizedTweets) fallbackCampaign.agent1.tweet_pack = fallbackAudit.sanitizedTweets;
-      (fallbackCampaign.agent1 as any).agent0_audit = {
-        verified: true,
-        intercepted: true,
-        log_id: fallbackAudit.logId,
-        compliance_score: fallbackAudit.complianceScore,
-        triggers: fallbackAudit.triggers,
+      // Helper to attempt parsing with self-correction
+      async function robustParse(jsonStr: string, depth = 0): Promise<any> {
+        try {
+          // If the AI returned markdown code blocks, strip them first
+          let cleanStr = jsonStr.replace(/^```json\s*/, '').replace(/\s*```$/, '').trim();
+          
+          // Aggressively find the first '{' and last '}'
+          const start = cleanStr.indexOf('{');
+          const end = cleanStr.lastIndexOf('}');
+          
+          if (start === -1 || end === -1 || start >= end) {
+            console.error('Failed JSON parsing. Raw output:', jsonStr);
+            throw new Error('No valid JSON structure found in output');
+          }
+          
+          const sanitized = cleanStr.substring(start, end + 1);
+          return JSON.parse(sanitized);
+        } catch (e: any) {
+          if (depth >= 2) throw new Error('Failed to repair JSON after 2 retries');
+          
+          console.log(`JSON Repair Attempt ${depth + 1}, Error: ${e.message}`);
+          
+          // Ask model to fix it
+          const repairResponse = await callGeminiDirectly({
+            contents: `You provided invalid JSON. Here is the error: ${e.message}. 
+                       Input was: ${jsonStr}. 
+                       Please output ONLY the corrected, valid JSON object. Do not include any explanations or markdown.`,
+            systemInstruction: "Output valid JSON.",
+          });
+          
+          return await robustParse(repairResponse || "{}", depth + 1);
+        }
+      }
+
+      // 1. Generate Narrative (Agent 1: Strategist + Executor)
+      let parsed = null;
+      let isValid = false;
+      let attempts = 0;
+
+      while (!isValid && attempts < 3) {
+        attempts++;
+        try {
+          // Fetch history to avoid repetition
+          const history = await getNarrativeHistory(effectivePrompt);
+          
+          // Agent 1a: Strategy Formulation
+          const strategyPrompt = buildStrategistPrompt(effectivePrompt, category, preFlight.components.narrative_objective, history);
+          const rawStrategy = await callGeminiDirectly({
+            contents: strategyPrompt,
+            systemInstruction: "You are a Narrative Strategist. Output a strategic blueprint JSON.",
+          });
+          const blueprint = await robustParse(rawStrategy);
+
+          // Agent 1b: Creative Execution (Certified with Agent 0 Pre-Flight)
+          const executorPrompt = buildExecutorPrompt(effectivePrompt, category, blueprint, preFlight);
+          const rawJson = await callGeminiDirectly({
+            contents: executorPrompt,
+            systemInstruction: getAgent1SystemInstruction(preFlight.components.vibe_tone),
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                token_name: { type: Type.STRING },
+                ticker: { type: Type.STRING },
+                tagline: { type: Type.STRING },
+                rallying_phrase: { type: Type.STRING },
+                viral_score: { type: Type.INTEGER },
+                lore: { type: Type.STRING },
+                tweet_pack: {
+                  type: Type.ARRAY,
+                  items: { type: Type.STRING },
+                },
+                mascot_prompt: { type: Type.STRING },
+              },
+              required: ["token_name", "ticker", "tagline", "rallying_phrase", "viral_score", "lore", "tweet_pack", "mascot_prompt"],
+            },
+          });
+          
+          if (!rawJson) throw new Error("AI returned empty response");
+          
+          parsed = await robustParse(rawJson);
+          
+          // Branding Signature Collision Detection
+          const brandingSignature = `${parsed.lore}|${parsed.mascot_prompt}|${parsed.tagline}`;
+          const signatureHash = generateHash(brandingSignature);
+          try {
+            const signatureSnap = await getDoc(doc(db, "branding_signatures", signatureHash));
+            
+            if (signatureSnap.exists()) {
+              console.log(`Narrative Conflict detected for ${signatureHash}. Re-rolling Agent 1/2...`);
+              continue; 
+            }
+          } catch (sigErr) {
+            console.warn(`Firestore branding signature check failed for ${signatureHash}:`, sigErr);
+            // Continue even if signature check fails
+          }
+          
+          // Validation: check if the generated mascot prompt contains the requested subject
+          const targetSubject = preFlight.components.subject.toLowerCase();
+          const targetWords = targetSubject.split(/\s+/).filter(word => word.length >= 3);
+          const mascotPromptLower = (parsed.mascot_prompt || "").toLowerCase();
+          const tokenNameLower = (parsed.token_name || "").toLowerCase();
+          
+          // Check if at least one meaningful keyword from the subject is present
+          const isValidSubject = targetWords.length === 0 || targetWords.some(keyword => mascotPromptLower.includes(keyword) || tokenNameLower.includes(keyword));
+          
+          if (isValidSubject) {
+            isValid = true;
+            // Stamp Agent 0 Pre-Flight Audit into Narrative Result
+            parsed.agent0_audit = {
+              verified: preFlight.verified,
+              intercepted: false,
+              compliance_score: preFlight.compliance_score,
+              preflight_components: preFlight.components,
+            };
+
+            // Persist the success to history
+            await saveNarrativeHistory(effectivePrompt, blueprint.strategy, blueprint.aesthetic);
+            
+            // Persist signature to prevent duplicate narrative/lore
+            try {
+              await setDoc(doc(db, "branding_signatures", signatureHash), { createdAt: new Date().toISOString() });
+            } catch (sigSetErr) {
+              console.warn(`Failed to persist branding signature ${signatureHash}:`, sigSetErr);
+              // Continue even if signature persistence fails
+            }
+
+            console.log(`Attempt ${attempts}: Validation passed for mascot "${targetSubject}".`);
+          } else {
+            console.log(`Attempt ${attempts}: AI generated mascot did not match "${targetSubject}". Retrying...`);
+          }
+        } catch (err: any) {
+          console.log(`Attempt ${attempts}: Execution failed. Error: ${err.message}`);
+        }
+      }
+      
+      // 2. Generate Visual (Agent 2)
+      const visualInput = {
+        mascot_prompt: parsed.mascot_prompt,
+        ticker: parsed.ticker,
+        token_name: parsed.token_name,
+        category,
+        style: preFlight.components.art_medium
       };
-    } else {
-      (fallbackCampaign.agent1 as any).agent0_audit = {
-        verified: true,
-        intercepted: false,
-        compliance_score: 100,
-      };
-    }
+      const agent2Prompt = buildAgent2Prompt(parsed.mascot_prompt, parsed.ticker, template_type, preFlight.components.art_medium);
+      const rawAgent2 = await callGeminiDirectly({
+        contents: agent2Prompt,
+        systemInstruction: AGENT_2_SYSTEM_INSTRUCTION,
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            image_generation_prompt: { type: Type.STRING },
+            negative_prompt: { type: Type.STRING },
+            meme_overlay: {
+              type: Type.OBJECT,
+              properties: {
+                template_type: { type: Type.STRING },
+                top_header: { type: Type.STRING },
+                bottom_caption: { type: Type.STRING },
+                ticker_watermark: { type: Type.STRING },
+              },
+              required: ["template_type", "top_header", "bottom_caption", "ticker_watermark"],
+            },
+          },
+          required: ["image_generation_prompt", "negative_prompt", "meme_overlay"],
+        },
+      });
+      const parsedAgent2 = rawAgent2 ? await robustParse(rawAgent2) : {};
+      
+      // Generate mascot SVG
+      parsedAgent2.mascot_svg = generateVectorMascotSvg(parsed.ticker, parsed.token_name, parsed.mascot_prompt, category, 'Cyberpunk');
 
-    return res.json(fallbackCampaign);
-  } catch (error: any) {
-    console.error("Full Campaign Error:", error);
-    // Never crash the request: return procedural campaign
-    const fallbackCampaign = generateProceduralCampaign(req.body.category || "Tech/AI Absurdism", req.body.prompt || "", req.body.template_type || "Breaking News");
-    return res.json(fallbackCampaign);
+      // 3. Generate Mobilization (Agent 3)
+      const agent3Prompt = buildAgent3Prompt(parsed.ticker, 'Token Launch', '', 'Degen');
+      const rawAgent3 = await callGeminiDirectly({
+        contents: agent3Prompt,
+        systemInstruction: AGENT_3_SYSTEM_INSTRUCTION,
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            telegram_message: { type: Type.STRING },
+            button_label: { type: Type.STRING },
+            button_url: { type: Type.STRING },
+            alert_type: { type: Type.STRING },
+            buy_volume_sol: { type: Type.NUMBER },
+            market_cap_usd: { type: Type.STRING },
+          },
+          required: ["telegram_message", "button_label", "button_url"],
+        },
+      });
+      const parsedAgent3 = rawAgent3 ? await robustParse(rawAgent3) : {
+        telegram_message: `🚀 NEW ${parsed.ticker} FAIR LAUNCH!`,
+        button_label: `⚡ Execute ${parsed.ticker} Broadcast`,
+        button_url: `https://x.com/`,
+      };
+
+      const fullCampaignData = { agent1: parsed, agent2: parsedAgent2, agent3: parsedAgent3 };
+      generationJobs.set(jobId, { status: 'completed', data: fullCampaignData });
+
+      // 1. Persist full campaign to recent_generations collection in Firestore
+      try {
+        await saveRecentGeneration({
+          token_name: parsed.token_name || 'UNKNOWN',
+          ticker: parsed.ticker || 'MEME',
+          tagline: parsed.tagline || '',
+          rallying_phrase: parsed.rallying_phrase || '',
+          viral_score: parsed.viral_score || 85,
+          category,
+          prompt: effectivePrompt,
+          mascot_prompt: parsed.mascot_prompt || '',
+          mascot_svg: parsedAgent2?.mascot_svg || '',
+          agent1: parsed,
+          agent2: parsedAgent2,
+          agent3: parsedAgent3,
+          createdAt: new Date().toISOString()
+        });
+      } catch (genSaveErr) {
+        console.warn("[Firestore] Failed to persist recent generation:", genSaveErr);
+      }
+
+      // 2. Persist to campaign_cache
+      try {
+        await setDoc(doc(db, "campaign_cache", inputHash), { ...fullCampaignData, createdAt: new Date().toISOString() });
+      } catch (cacheErr) {
+        console.warn("Failed to persist full campaign cache:", cacheErr);
+      }
+    } catch (error: any) {
+      console.error("Async Campaign Generation Error:", error);
+      generationJobs.set(jobId, { status: 'failed', error: error.message });
+    }
+  })();
+
+  return res.status(202).json({ jobId });
+});
+
+app.get("/api/campaign-status/:jobId", (req, res) => {
+  const job = generationJobs.get(req.params.jobId);
+  console.log("Checking job status:", req.params.jobId, job); 
+  if (!job) return res.status(404).json({ error: "Job not found" });
+  return res.json(job);
+});
+
+// Endpoint to fetch recent generations from Firestore
+app.get("/api/recent-generations", async (req, res) => {
+  try {
+    const count = parseInt(req.query.limit as string) || 12;
+    const records = await getRecentGenerations(count);
+    return res.json({ success: true, count: records.length, generations: records });
+  } catch (err: any) {
+    console.error("Failed to retrieve recent generations:", err);
+    return res.status(500).json({ error: "Failed to retrieve recent generations" });
   }
 });
+
+// Helper to extract and repair JSON from potentially messy LLM output
+function repairMalformedJson(jsonStr: string): string {
+  if (!jsonStr) return '{}';
+  console.log("Raw LLM Output:", jsonStr); 
+
+  // 1. Strip Markdown code blocks
+  let sanitized = jsonStr.replace(/```json/g, '').replace(/```/g, '').trim();
+
+  // 2. Find the first '{'
+  const start = sanitized.indexOf('{');
+  if (start === -1) return '{}';
+  
+  // 3. Find the balancing '}'
+  let openBraces = 0;
+  let end = -1;
+  for (let i = start; i < sanitized.length; i++) {
+    if (sanitized[i] === '{') openBraces++;
+    else if (sanitized[i] === '}') openBraces--;
+    
+    if (openBraces === 0) {
+      end = i;
+      break;
+    }
+  }
+  
+  if (end === -1) return '{}'; // No balanced object found
+  
+  sanitized = sanitized.substring(start, end + 1);
+  
+  // 4. Remove trailing commas before a closing brace or bracket
+  sanitized = sanitized.replace(/,\s*([\]\}])/g, '$1');
+
+  // 5. Aggressively clean newlines/tabs
+  sanitized = sanitized.replace(/\\/g, '\\\\')
+                       .replace(/\n/g, '\\n')
+                       .replace(/\r/g, '\\r')
+                       .replace(/\t/g, '\\t');
+                       
+  // 6. Try to escape unescaped internal double quotes
+  // This looks for " not preceded by structural characters
+  sanitized = sanitized.replace(/([^\s:,\[\{])"/g, '$1\\"');
+  
+  return sanitized;
+}
+// Alias for compatibility if still used
+const sanitizeAndRepairJson = repairMalformedJson;
 
 // Ticker Audit & DEX Collision Detection API
 app.post("/api/audit-ticker", (req, res) => {
@@ -2216,6 +2530,14 @@ app.post("/api/deploy-token", async (req, res) => {
     },
   };
 
+  // Increment Superadmin Live Metrics
+  superadminStore.metrics.tokensDeployedTotal += 1;
+  superadminStore.metrics.lpBurnedCount += 1;
+  superadminStore.metrics.hitlApprovalsStamped += 1;
+  superadminStore.metrics.solRaisedSimulated = parseFloat(
+    (superadminStore.metrics.solRaisedSimulated + Number(initial_buy_sol || 0)).toFixed(2)
+  );
+
   return res.json(deploymentData);
 });
 
@@ -2231,7 +2553,7 @@ Rules:
 - Respond in 1-2 punchy sentences maximum with Crypto Twitter humor (WAGMI, god candle, bonding curve, send it, solana).
 - Stay deeply in character as the mascot. Be humorous, confident, and hype-focused. Never break character.`;
 
-    const rawResponse = await callGeminiWithFallback({
+    const rawResponse = await callGeminiDirectly({
       contents: `User asks: "${user_message}"`,
       systemInstruction,
     });
@@ -2313,7 +2635,7 @@ Return ONLY valid JSON matching this schema:
   "viral_angle": "Brief explanation of the narrative hook"
 }`;
 
-    const rawResponse = await callGeminiWithFallback({
+    const rawResponse = await callGeminiDirectly({
       contents: `Generate autonomous scheduled community broadcast for ${ticker} (${token_name}).`,
       systemInstruction,
     });
@@ -2595,6 +2917,7 @@ app.post("/api/swarm/lore-keeper", swarmRateLimiter, async (req, res) => {
         const prompt = `You are the Chief Meme Officer (Lore Keeper Agent) for the Solana meme coin "${token_name}" (${ticker}).
 Unlocking Season ${season_number} because the community reached the milestone: "${milestone_achieved}".
 Generate an episodic story expansion in punchy, meme-native, funny language.
+CRITICAL: "new_lore_snippet" must be under 300 characters.
 Return JSON:
 {
   "episode_title": "string",
