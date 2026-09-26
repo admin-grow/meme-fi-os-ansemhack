@@ -12,7 +12,7 @@
 ## 🌐 Project Links & Submission Overview
 
 * **Live Web Application:** [https://memefios.com](https://memefios.com)
-* **Cloud Run Preview:** [https://ais-pre-pui6ag2iv4o6xlym7chb34-364432142619.us-east1.run.app](https://ais-pre-pui6ag2iv4o6xlym7chb34-364432142619.us-east1.run.app)
+* **Cloud Run Preview:** [https://ais-dev-pui6ag2iv4o6xlym7chb34-364432142619.us-east1.run.app](https://ais-dev-pui6ag2iv4o6xlym7chb34-364432142619.us-east1.run.app)
 * **Target Protocol:** ClawPump (`clawpump.tech`) on Solana
 * **Target Track:** Autonomous Agents & Meme Coin Infrastructure (#AnsemHack 2026)
 * **Official Hashtags & Mentions:** `#AnsemHack` `#Solana` `#ClawPump` `#MemeCoin` `@clawpumptech` `@MemeFi_OS`
